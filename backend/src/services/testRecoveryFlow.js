@@ -18,12 +18,12 @@ const runRecoveryFlow = async () => {
 
     const customer =
       await Customer.findOne({
-        name: "Amit Singh"
+        name: "Mohan Reddy"
       });
 
     if (!customer) {
       throw new Error(
-        "Amit Singh not found"
+        "Mohan Reddy not found"
       );
     }
 
