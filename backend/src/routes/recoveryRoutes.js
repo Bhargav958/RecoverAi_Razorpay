@@ -2,7 +2,8 @@ import express from "express";
 
 import {
   analyzeCase,
-  getRecoveryCase
+  getRecoveryCase,
+  processCase
 } from "../controllers/recoveryController.js";
 
 const router = express.Router();
@@ -15,6 +16,11 @@ router.get(
 router.post(
   "/cases/:id/analyze",
   analyzeCase
+);
+
+router.post(
+  "/cases/:id/process",
+  processCase
 );
 
 export default router;

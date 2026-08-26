@@ -1,5 +1,6 @@
 import RecoveryCase from "../models/RecoveryCase.js";
 import analyzeRecoveryCase from "../services/recoveryAnalysisService.js";
+import processRecoveryCase from "../services/recoveryOrchestrator.js";
 
 export const analyzeCase = async (req, res) => {
   try {
@@ -52,6 +53,35 @@ export const getRecoveryCase = async (req, res) => {
   } catch (error) {
     console.error(
       "Get recovery case error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+export const processCase = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result =
+      await processRecoveryCase({
+        recoveryCaseId: id,
+        mode:
+          req.body?.mode ||
+          "SIMULATION"
+      });
+
+    res.status(200).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error(
+      "Recovery orchestration error:",
       error
     );
 
