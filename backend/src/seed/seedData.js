@@ -9,6 +9,9 @@ import Payment from "../models/Payment.js";
 import RecoveryCase from "../models/RecoveryCase.js";
 import Policy from "../models/Policy.js";
 
+import RecoveryAction from "../models/RecoveryAction.js";
+import AuditLog from "../models/AuditLog.js";
+
 dotenv.config();
 
 /*
@@ -128,6 +131,28 @@ const seedDatabase = async () => {
     });
 
     if (existingMerchant) {
+      console.log("🧹 Removing previous Acme SaaS demo data...");
+
+      await AuditLog.deleteMany({
+        merchantId: existingMerchant._id
+      });
+
+      const oldRecoveryCases =
+        await RecoveryCase.find({
+          merchantId: existingMerchant._id
+        }).select("_id");
+
+      const recoveryCaseIds =
+        oldRecoveryCases.map((item) => item._id);
+
+      if (recoveryCaseIds.length > 0) {
+        await RecoveryAction.deleteMany({
+          recoveryCaseId: {
+            $in: recoveryCaseIds
+          }
+        });
+      }
+
       await RecoveryCase.deleteMany({
         merchantId: existingMerchant._id
       });
@@ -224,7 +249,7 @@ const seedDatabase = async () => {
 
     for(let i=1; i<TOTAL_CUSTOMERS; i++){
       const firstName = firstNames[i % firstNames.length];
-      const lastName = lastNames[Math.floor(i / firstNames.length) % lastNames.length];
+      const lastName = lastNames[i % lastNames.length];
 
       const name = `${firstName} ${lastName}`;
 
@@ -624,10 +649,7 @@ const seedDatabase = async () => {
 
         currentAction: recommendedAction,
 
-        status:
-          i === 0
-            ? "PENDING_ACTION"
-            : "DETECTED",
+        status: "DETECTED",
 
         attempts: 0,
 

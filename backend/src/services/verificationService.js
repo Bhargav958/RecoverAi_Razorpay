@@ -196,16 +196,25 @@ import RecoveryCase from "../models/RecoveryCase.js";
 import Payment from "../models/Payment.js";
 import Customer from "../models/Customer.js";
 
+import {
+  createAuditLog
+} from "./auditService.js";
+
 /*
 |--------------------------------------------------------------------------
-| Verify Recovery
+| Verification Service
 |--------------------------------------------------------------------------
 |
-| This service determines whether an executed recovery action
-| actually resulted in recovered revenue.
+| This service determines whether an executed recovery action actually
+| resulted in recovered revenue.
 |
 | IMPORTANT:
+|
 | Executing an action does NOT mean the payment was recovered.
+|
+| Only successful verification can move a recovery case to:
+|
+| RECOVERED
 |
 |--------------------------------------------------------------------------
 */
@@ -216,7 +225,7 @@ const verifyRecovery = async ({
 }) => {
   /*
   |--------------------------------------------------------------------------
-  | Load action
+  | Load Recovery Action
   |--------------------------------------------------------------------------
   */
 
@@ -236,11 +245,14 @@ const verifyRecovery = async ({
   | Idempotency
   |--------------------------------------------------------------------------
   |
-  | Don't process an already verified successful action again.
+  | If this action has already succeeded, do not count the recovered
+  | amount again.
   |
   */
 
-  if (action.status === "SUCCEEDED") {
+  if (
+    action.status === "SUCCEEDED"
+  ) {
     const existingRecoveryCase =
       await RecoveryCase.findById(
         action.recoveryCaseId
@@ -248,11 +260,16 @@ const verifyRecovery = async ({
 
     return {
       success: true,
+
       recovered: true,
+
       alreadyVerified: true,
+
       amountRecovered:
         action.amountRecovered || 0,
+
       action,
+
       recoveryCase:
         existingRecoveryCase
     };
@@ -260,7 +277,7 @@ const verifyRecovery = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Action must have been executed
+  | Action must be EXECUTED
   |--------------------------------------------------------------------------
   */
 
@@ -274,7 +291,7 @@ const verifyRecovery = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Load recovery case
+  | Load Recovery Case
   |--------------------------------------------------------------------------
   */
 
@@ -291,7 +308,7 @@ const verifyRecovery = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Load payment
+  | Load Payment
   |--------------------------------------------------------------------------
   */
 
@@ -308,7 +325,7 @@ const verifyRecovery = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Load customer
+  | Load Customer
   |--------------------------------------------------------------------------
   */
 
@@ -325,7 +342,7 @@ const verifyRecovery = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Move case to VERIFYING
+  | Move Case to VERIFYING
   |--------------------------------------------------------------------------
   */
 
@@ -333,7 +350,8 @@ const verifyRecovery = async ({
     "VERIFYING";
 
   recoveryCase.timeline.push({
-    event: "VERIFICATION_STARTED",
+    event:
+      "VERIFICATION_STARTED",
 
     description:
       "Recovery outcome verification started.",
@@ -345,14 +363,14 @@ const verifyRecovery = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | SIMULATION MODE
+  | SIMULATION MODE — SUCCESS
   |--------------------------------------------------------------------------
   */
 
   if (simulateSuccess) {
     /*
-     * In simulation mode we assume the customer
-     * successfully completed the recovery payment.
+     * In simulation mode, assume the customer successfully
+     * completed the recovery payment.
      */
 
     payment.status =
@@ -360,6 +378,10 @@ const verifyRecovery = async ({
 
     payment.paidAt =
       new Date();
+
+    /*
+     * Mark action successful.
+     */
 
     action.status =
       "SUCCEEDED";
@@ -375,7 +397,7 @@ const verifyRecovery = async ({
       "Payment successfully recovered in simulation.";
 
     /*
-     * Update recovery case
+     * Update Recovery Case.
      */
 
     recoveryCase.amountRecovered =
@@ -388,7 +410,7 @@ const verifyRecovery = async ({
       "Payment successfully recovered.";
 
     /*
-     * Update customer statistics
+     * Update Customer statistics.
      */
 
     customer.successfulPayments += 1;
@@ -396,7 +418,7 @@ const verifyRecovery = async ({
     customer.previousRecoveries += 1;
 
     /*
-     * Recalculate total payment count defensively.
+     * Keep totalPayments logically consistent.
      */
 
     if (
@@ -413,11 +435,12 @@ const verifyRecovery = async ({
       recoveryCase.amountAtRisk;
 
     /*
-     * Timeline
+     * Recovery Case Timeline
      */
 
     recoveryCase.timeline.push({
-      event: "PAYMENT_RECOVERED",
+      event:
+        "PAYMENT_RECOVERED",
 
       description:
         `₹${recoveryCase.amountAtRisk.toLocaleString(
@@ -438,7 +461,7 @@ const verifyRecovery = async ({
     });
 
     /*
-     * Save everything
+     * Save database changes.
      */
 
     await payment.save();
@@ -448,6 +471,73 @@ const verifyRecovery = async ({
     await action.save();
 
     await recoveryCase.save();
+
+    /*
+     |--------------------------------------------------------------------------
+     | Audit: Payment Recovered
+     |--------------------------------------------------------------------------
+     */
+
+    await createAuditLog({
+      merchantId:
+        recoveryCase.merchantId,
+
+      recoveryCaseId:
+        recoveryCase._id,
+
+      actor:
+        "SYSTEM",
+
+      eventType:
+        "PAYMENT_RECOVERED",
+
+      description:
+        `₹${recoveryCase.amountAtRisk.toLocaleString(
+          "en-IN"
+        )} successfully recovered.`,
+
+      metadata: {
+        actionId:
+          action._id,
+
+        paymentId:
+          payment._id,
+
+        amountRecovered:
+          recoveryCase.amountRecovered
+      }
+    });
+
+    /*
+     |--------------------------------------------------------------------------
+     | Audit: Workflow Stopped
+     |--------------------------------------------------------------------------
+     */
+
+    await createAuditLog({
+      merchantId:
+        recoveryCase.merchantId,
+
+      recoveryCaseId:
+        recoveryCase._id,
+
+      actor:
+        "SYSTEM",
+
+      eventType:
+        "RECOVERY_WORKFLOW_STOPPED",
+
+      description:
+        "Recovery workflow stopped because payment was successfully recovered.",
+
+      metadata: {
+        stopReason:
+          recoveryCase.stoppedReason,
+
+        amountRecovered:
+          recoveryCase.amountRecovered
+      }
+    });
 
     return {
       success: true,
@@ -471,7 +561,7 @@ const verifyRecovery = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | SIMULATED FAILURE
+  | SIMULATION MODE — FAILURE
   |--------------------------------------------------------------------------
   */
 
@@ -482,7 +572,8 @@ const verifyRecovery = async ({
     action.executedAt ||
     new Date();
 
-  action.amountRecovered = 0;
+  action.amountRecovered =
+    0;
 
   action.result =
     "Recovery action executed, but the customer did not complete payment.";
@@ -506,6 +597,39 @@ const verifyRecovery = async ({
   await action.save();
 
   await recoveryCase.save();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Audit: Recovery Failed
+  |--------------------------------------------------------------------------
+  */
+
+  await createAuditLog({
+    merchantId:
+      recoveryCase.merchantId,
+
+    recoveryCaseId:
+      recoveryCase._id,
+
+    actor:
+      "SYSTEM",
+
+    eventType:
+      "RECOVERY_ATTEMPT_FAILED",
+
+    description:
+      "Recovery action executed but payment was not recovered.",
+
+    metadata: {
+      actionId:
+        action._id,
+
+      paymentId:
+        payment._id,
+
+      amountRecovered: 0
+    }
+  });
 
   return {
     success: true,

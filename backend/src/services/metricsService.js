@@ -1,28 +1,25 @@
 import RecoveryCase from "../models/RecoveryCase.js";
-import Payment from "../models/Payment.js";
+import RecoveryAction from "../models/RecoveryAction.js";
 
 /*
 |--------------------------------------------------------------------------
-| Metrics Service
+| Revenue at Risk
 |--------------------------------------------------------------------------
 |
-| All merchant-level recovery metrics should be calculated from the
-| database instead of being hard-coded in the frontend.
+| Revenue that is currently sitting inside non-terminal recovery cases.
 |
-|--------------------------------------------------------------------------
 */
 
 const getRevenueAtRisk = async (merchantId) => {
   const result = await RecoveryCase.aggregate([
     {
       $match: {
-        merchantId
-      }
-    },
-    {
-      $match: {
+        merchantId,
         status: {
-          $nin: ["RECOVERED", "STOPPED"]
+          $nin: [
+            "RECOVERED",
+            "STOPPED"
+          ]
         }
       }
     },
@@ -39,7 +36,56 @@ const getRevenueAtRisk = async (merchantId) => {
   return result[0]?.total || 0;
 };
 
-const getTargetedRevenue = async (merchantId) => {
+/*
+|--------------------------------------------------------------------------
+| Recoverable Revenue
+|--------------------------------------------------------------------------
+|
+| Sum of expected recovery for cases that are still active.
+|
+*/
+
+const getRecoverableRevenue = async (
+  merchantId
+) => {
+  const result = await RecoveryCase.aggregate([
+    {
+      $match: {
+        merchantId,
+        status: {
+          $nin: [
+            "RECOVERED",
+            "STOPPED"
+          ]
+        }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        total: {
+          $sum: "$expectedRecovery"
+        }
+      }
+    }
+  ]);
+
+  return result[0]?.total || 0;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Targeted Revenue
+|--------------------------------------------------------------------------
+|
+| Revenue belonging to cases that have actually entered the
+| recovery workflow.
+|
+*/
+
+const getTargetedRevenue = async (
+  merchantId
+) => {
   const result = await RecoveryCase.aggregate([
     {
       $match: {
@@ -62,7 +108,19 @@ const getTargetedRevenue = async (merchantId) => {
   return result[0]?.total || 0;
 };
 
-const getAttemptedRevenue = async (merchantId) => {
+/*
+|--------------------------------------------------------------------------
+| Attempted Revenue
+|--------------------------------------------------------------------------
+|
+| Count each recovery case only once, even if the case had
+| multiple recovery actions.
+|
+*/
+
+const getAttemptedRevenue = async (
+  merchantId
+) => {
   const result = await RecoveryCase.aggregate([
     {
       $match: {
@@ -85,14 +143,48 @@ const getAttemptedRevenue = async (merchantId) => {
   return result[0]?.total || 0;
 };
 
-const getRecoveredRevenue = async (merchantId) => {
-  const result = await RecoveryCase.aggregate([
+/*
+|--------------------------------------------------------------------------
+| Recovered Revenue
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| Actual recovered money comes from successfully completed
+| recovery actions.
+|
+| This prevents duplicate counting when a case has more than
+| one action.
+|
+*/
+
+const getRecoveredRevenue = async (
+  merchantId
+) => {
+  const result = await RecoveryAction.aggregate([
     {
       $match: {
-        merchantId,
+        status: "SUCCEEDED",
         amountRecovered: {
           $gt: 0
         }
+      }
+    },
+    {
+      $lookup: {
+        from: "recoverycases",
+        localField: "recoveryCaseId",
+        foreignField: "_id",
+        as: "recoveryCase"
+      }
+    },
+    {
+      $unwind: "$recoveryCase"
+    },
+    {
+      $match: {
+        "recoveryCase.merchantId":
+          merchantId
       }
     },
     {
@@ -108,30 +200,15 @@ const getRecoveredRevenue = async (merchantId) => {
   return result[0]?.total || 0;
 };
 
-const getRecoverableRevenue = async (merchantId) => {
-  const result = await RecoveryCase.aggregate([
-    {
-      $match: {
-        merchantId,
-        status: {
-          $nin: ["RECOVERED", "STOPPED"]
-        }
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        total: {
-          $sum: "$expectedRecovery"
-        }
-      }
-    }
-  ]);
+/*
+|--------------------------------------------------------------------------
+| Active Cases
+|--------------------------------------------------------------------------
+*/
 
-  return result[0]?.total || 0;
-};
-
-const getActiveCases = async (merchantId) => {
+const getActiveCases = async (
+  merchantId
+) => {
   return RecoveryCase.countDocuments({
     merchantId,
     status: {
@@ -144,24 +221,49 @@ const getActiveCases = async (merchantId) => {
   });
 };
 
-const getCaseCount = async (merchantId) => {
+/*
+|--------------------------------------------------------------------------
+| Total Cases
+|--------------------------------------------------------------------------
+*/
+
+const getCaseCount = async (
+  merchantId
+) => {
   return RecoveryCase.countDocuments({
     merchantId
   });
 };
 
-const getRecoveredCaseCount = async (merchantId) => {
+/*
+|--------------------------------------------------------------------------
+| Recovered Cases
+|--------------------------------------------------------------------------
+*/
+
+const getRecoveredCaseCount = async (
+  merchantId
+) => {
   return RecoveryCase.countDocuments({
     merchantId,
     status: "RECOVERED"
   });
 };
 
+/*
+|--------------------------------------------------------------------------
+| Recovery Rate
+|--------------------------------------------------------------------------
+*/
+
 const getRecoveryRate = (
   recoveredRevenue,
   targetedRevenue
 ) => {
-  if (!targetedRevenue) {
+  if (
+    !targetedRevenue ||
+    targetedRevenue <= 0
+  ) {
     return 0;
   }
 
@@ -174,78 +276,116 @@ const getRecoveryRate = (
   );
 };
 
-const getRootCauseDistribution = async (
-  merchantId
-) => {
-  return RecoveryCase.aggregate([
-    {
-      $match: {
-        merchantId
-      }
-    },
-    {
-      $group: {
-        _id: "$rootCause",
-        cases: {
-          $sum: 1
-        },
-        revenueAtRisk: {
-          $sum: "$amountAtRisk"
+/*
+|--------------------------------------------------------------------------
+| Root Cause Distribution
+|--------------------------------------------------------------------------
+*/
+
+const getRootCauseDistribution =
+  async (merchantId) => {
+    return RecoveryCase.aggregate([
+      {
+        $match: {
+          merchantId
+        }
+      },
+      {
+        $group: {
+          _id: "$rootCause",
+
+          cases: {
+            $sum: 1
+          },
+
+          revenueAtRisk: {
+            $sum: "$amountAtRisk"
+          }
+        }
+      },
+      {
+        $sort: {
+          revenueAtRisk: -1
         }
       }
-    },
-    {
-      $sort: {
-        revenueAtRisk: -1
-      }
-    }
-  ]);
-};
-
-const getRecoveryMetrics = async (
-  merchantId
-) => {
-  const [
-    revenueAtRisk,
-    recoverableRevenue,
-    targetedRevenue,
-    attemptedRevenue,
-    recoveredRevenue,
-    activeCases,
-    caseCount,
-    recoveredCaseCount,
-    rootCauseDistribution
-  ] = await Promise.all([
-    getRevenueAtRisk(merchantId),
-    getRecoverableRevenue(merchantId),
-    getTargetedRevenue(merchantId),
-    getAttemptedRevenue(merchantId),
-    getRecoveredRevenue(merchantId),
-    getActiveCases(merchantId),
-    getCaseCount(merchantId),
-    getRecoveredCaseCount(merchantId),
-    getRootCauseDistribution(merchantId)
-  ]);
-
-  const recoveryRate =
-    getRecoveryRate(
-      recoveredRevenue,
-      targetedRevenue
-    );
-
-  return {
-    revenueAtRisk,
-    recoverableRevenue,
-    targetedRevenue,
-    attemptedRevenue,
-    recoveredRevenue,
-    recoveryRate,
-    activeCases,
-    caseCount,
-    recoveredCaseCount,
-    rootCauseDistribution
+    ]);
   };
-};
+
+/*
+|--------------------------------------------------------------------------
+| Master Metrics Function
+|--------------------------------------------------------------------------
+*/
+
+const getRecoveryMetrics =
+  async (merchantId) => {
+    const [
+      revenueAtRisk,
+      recoverableRevenue,
+      targetedRevenue,
+      attemptedRevenue,
+      recoveredRevenue,
+      activeCases,
+      caseCount,
+      recoveredCaseCount,
+      rootCauseDistribution
+    ] = await Promise.all([
+      getRevenueAtRisk(
+        merchantId
+      ),
+
+      getRecoverableRevenue(
+        merchantId
+      ),
+
+      getTargetedRevenue(
+        merchantId
+      ),
+
+      getAttemptedRevenue(
+        merchantId
+      ),
+
+      getRecoveredRevenue(
+        merchantId
+      ),
+
+      getActiveCases(
+        merchantId
+      ),
+
+      getCaseCount(
+        merchantId
+      ),
+
+      getRecoveredCaseCount(
+        merchantId
+      ),
+
+      getRootCauseDistribution(
+        merchantId
+      )
+    ]);
+
+    const recoveryRate =
+      getRecoveryRate(
+        recoveredRevenue,
+        targetedRevenue
+      );
+
+    return {
+      revenueAtRisk,
+      recoverableRevenue,
+      targetedRevenue,
+      attemptedRevenue,
+      recoveredRevenue,
+      recoveryRate,
+      activeCases,
+      caseCount,
+      recoveredCaseCount,
+      rootCauseDistribution
+    };
+  };
 
 export {
   getRevenueAtRisk,

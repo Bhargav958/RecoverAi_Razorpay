@@ -1,40 +1,88 @@
 import RecoveryCase from "../models/RecoveryCase.js";
 import Customer from "../models/Customer.js";
+import Payment from "../models/Payment.js";
 
 import { calculateRisk } from "./riskEngine.js";
 import diagnosePaymentFailure from "./diagnosePaymentFailure.js";
 import evaluatePolicy from "./policyEngine.js";
 import recoveryActionService from "./recoveryActionService.js";
+import { createAuditLog } from "./auditService.js";
+
+/*
+|--------------------------------------------------------------------------
+| Recovery Orchestrator
+|--------------------------------------------------------------------------
+|
+| Main recovery workflow:
+|
+| Detect
+|   ↓
+| Risk Analysis
+|   ↓
+| AI Diagnosis
+|   ↓
+| Policy Evaluation
+|   ↓
+| Recovery Action
+|
+| Execution + Verification happen in separate services.
+|
+|--------------------------------------------------------------------------
+*/
 
 const processRecoveryCase = async ({
   recoveryCaseId,
   mode = "SIMULATION"
 }) => {
+  /*
+  |--------------------------------------------------------------------------
+  | STEP 0 — Load Recovery Case
+  |--------------------------------------------------------------------------
+  */
+
   const recoveryCase =
-    await RecoveryCase.findById(recoveryCaseId);
+    await RecoveryCase.findById(
+      recoveryCaseId
+    );
 
   if (!recoveryCase) {
-    throw new Error("Recovery case not found");
+    throw new Error(
+      "Recovery case not found"
+    );
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Safety: don't process an already terminal case
+  | Terminal state protection
   |--------------------------------------------------------------------------
+  |
+  | Don't process an already completed case.
+  |
   */
 
   if (
-    ["RECOVERED", "STOPPED"].includes(
+    [
+      "RECOVERED",
+      "STOPPED"
+    ].includes(
       recoveryCase.status
     )
   ) {
     return {
       success: true,
+
       message:
         `Recovery case is already in terminal state: ${recoveryCase.status}`,
+
       recoveryCase
     };
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Load Customer
+  |--------------------------------------------------------------------------
+  */
 
   const customer =
     await Customer.findById(
@@ -49,27 +97,51 @@ const processRecoveryCase = async ({
 
   /*
   |--------------------------------------------------------------------------
+  | Load Payment
+  |--------------------------------------------------------------------------
+  */
+
+  const payment =
+    await Payment.findById(
+      recoveryCase.paymentId
+    );
+
+  if (!payment) {
+    throw new Error(
+      "Payment not found for recovery case"
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
   | STEP 1 — Risk Analysis
   |--------------------------------------------------------------------------
   */
 
-  recoveryCase.status = "ANALYZING";
+  recoveryCase.status =
+    "ANALYZING";
 
-  const risk = calculateRisk({
-    payment: await getPayment(recoveryCase),
-    customer
-  });
+  const risk =
+    calculateRisk({
+      payment,
+      customer
+    });
 
-  recoveryCase.riskScore = risk.riskScore;
+  recoveryCase.riskScore =
+    risk.riskScore;
 
-  recoveryCase.recoveryProbability =  risk.recoveryProbability;
+  recoveryCase.recoveryProbability =
+    risk.recoveryProbability;
 
-  recoveryCase.expectedRecovery = risk.expectedRecovery;
+  recoveryCase.expectedRecovery =
+    risk.expectedRecovery;
 
-  recoveryCase.priorityScore = risk.priorityScore;
+  recoveryCase.priorityScore =
+    risk.priorityScore;
 
   recoveryCase.timeline.push({
-    event: "RISK_ANALYSIS_COMPLETED",
+    event:
+      "RISK_ANALYSIS_COMPLETED",
 
     description:
       `Risk score ${risk.riskScore}/100. Recovery probability ${risk.recoveryProbability}%.`,
@@ -81,12 +153,46 @@ const processRecoveryCase = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | STEP 2 — AI Diagnosis
+  | Audit — Risk Analysis
   |--------------------------------------------------------------------------
   */
 
-  const payment =
-    await getPayment(recoveryCase);
+  await createAuditLog({
+    merchantId:
+      recoveryCase.merchantId,
+
+    recoveryCaseId:
+      recoveryCase._id,
+
+    actor:
+      "SYSTEM",
+
+    eventType:
+      "RISK_ANALYSIS_COMPLETED",
+
+    description:
+      `Risk score ${risk.riskScore}/100. Recovery probability ${risk.recoveryProbability}%.`,
+
+    metadata: {
+      riskScore:
+        risk.riskScore,
+
+      recoveryProbability:
+        risk.recoveryProbability,
+
+      expectedRecovery:
+        risk.expectedRecovery,
+
+      priorityScore:
+        risk.priorityScore
+    }
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | STEP 2 — AI Diagnosis
+  |--------------------------------------------------------------------------
+  */
 
   const diagnosisResult =
     await diagnosePaymentFailure({
@@ -95,22 +201,42 @@ const processRecoveryCase = async ({
       risk
     });
 
-  const diagnosis = diagnosisResult.diagnosis;
+  /*
+   * IMPORTANT:
+   * Declare diagnosis immediately after receiving the result.
+   * Nothing above this point should reference `diagnosis`.
+   */
 
-  recoveryCase.rootCause =  diagnosis.rootCause;
+  const diagnosis =
+    diagnosisResult.diagnosis;
 
-  recoveryCase.diagnosisConfidence = diagnosis.confidence;
+  /*
+  |--------------------------------------------------------------------------
+  | Store AI diagnosis
+  |--------------------------------------------------------------------------
+  */
 
-  recoveryCase.recommendedAction = diagnosis.recommendedAction;
+  recoveryCase.rootCause =
+    diagnosis.rootCause;
 
-  recoveryCase.currentAction = diagnosis.recommendedAction;
+  recoveryCase.diagnosisConfidence =
+    diagnosis.confidence;
 
-  recoveryCase.aiReason = diagnosis.reason;
+  recoveryCase.recommendedAction =
+    diagnosis.recommendedAction;
 
-  recoveryCase.evidence =  diagnosis.evidence;
+  recoveryCase.currentAction =
+    diagnosis.recommendedAction;
+
+  recoveryCase.aiReason =
+    diagnosis.reason;
+
+  recoveryCase.evidence =
+    diagnosis.evidence;
 
   recoveryCase.timeline.push({
-    event: "AI_DIAGNOSIS_COMPLETED",
+    event:
+      "AI_DIAGNOSIS_COMPLETED",
 
     description:
       `Root cause ${diagnosis.rootCause}. Recommended action ${diagnosis.recommendedAction}. Confidence ${diagnosis.confidence}%.`,
@@ -119,6 +245,55 @@ const processRecoveryCase = async ({
   });
 
   await recoveryCase.save();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Audit — AI Diagnosis
+  |--------------------------------------------------------------------------
+  */
+
+  await createAuditLog({
+    merchantId:
+      recoveryCase.merchantId,
+
+    recoveryCaseId:
+      recoveryCase._id,
+
+    actor:
+      "AI_AGENT",
+
+    eventType:
+      "AI_DIAGNOSIS_COMPLETED",
+
+    description:
+      `Root cause ${diagnosis.rootCause}. Recommended action ${diagnosis.recommendedAction}. Confidence ${diagnosis.confidence}%.`,
+
+    metadata: {
+      source:
+        diagnosisResult.source,
+
+      rootCause:
+        diagnosis.rootCause,
+
+      confidence:
+        diagnosis.confidence,
+
+      recommendedAction:
+        diagnosis.recommendedAction,
+
+      delayHours:
+        diagnosis.delayHours,
+
+      reason:
+        diagnosis.reason,
+
+      evidence:
+        diagnosis.evidence,
+
+      requiresHumanApproval:
+        diagnosis.requiresHumanApproval
+    }
+  });
 
   /*
   |--------------------------------------------------------------------------
@@ -134,11 +309,13 @@ const processRecoveryCase = async ({
     });
 
   recoveryCase.timeline.push({
-    event: policyResult.allowed
-      ? "POLICY_APPROVED"
-      : "POLICY_REJECTED",
+    event:
+      policyResult.allowed
+        ? "POLICY_APPROVED"
+        : "POLICY_REJECTED",
 
-    description: policyResult.reason,
+    description:
+      policyResult.reason,
 
     timestamp: new Date()
   });
@@ -147,7 +324,49 @@ const processRecoveryCase = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | STEP 4 — Execute / Schedule Action
+  | Audit — Policy Decision
+  |--------------------------------------------------------------------------
+  */
+
+  await createAuditLog({
+    merchantId:
+      recoveryCase.merchantId,
+
+    recoveryCaseId:
+      recoveryCase._id,
+
+    actor:
+      "POLICY_ENGINE",
+
+    eventType:
+      policyResult.allowed
+        ? "POLICY_APPROVED"
+        : "POLICY_REJECTED",
+
+    description:
+      policyResult.reason,
+
+    metadata: {
+      allowed:
+        policyResult.allowed,
+
+      action:
+        policyResult.action,
+
+      scheduledAt:
+        policyResult.scheduledAt,
+
+      requiresHumanApproval:
+        policyResult.requiresHumanApproval,
+
+      violations:
+        policyResult.violations
+    }
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | STEP 4 — Recovery Action
   |--------------------------------------------------------------------------
   */
 
@@ -159,6 +378,64 @@ const processRecoveryCase = async ({
       mode
     });
 
+  /*
+  |--------------------------------------------------------------------------
+  | Audit — Recovery Action
+  |--------------------------------------------------------------------------
+  */
+
+  if (actionResult.action) {
+    await createAuditLog({
+      merchantId:
+        recoveryCase.merchantId,
+
+      recoveryCaseId:
+        recoveryCase._id,
+
+      actor:
+        mode === "SIMULATION"
+          ? "SIMULATION"
+          : "SYSTEM",
+
+      eventType:
+        actionResult.scheduled
+          ? "ACTION_SCHEDULED"
+          : actionResult.executed
+            ? "ACTION_EXECUTED"
+            : "ACTION_REJECTED",
+
+      description:
+        actionResult.action.reason ||
+        "Recovery action processed.",
+
+      metadata: {
+        actionType:
+          actionResult.action.actionType,
+
+        targetChannel:
+          actionResult.action.targetChannel,
+
+        status:
+          actionResult.action.status,
+
+        scheduledAt:
+          actionResult.action.scheduledAt,
+
+        executedAt:
+          actionResult.action.executedAt,
+
+        amountRecovered:
+          actionResult.action.amountRecovered
+      }
+    });
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Return complete workflow state
+  |--------------------------------------------------------------------------
+  */
+
   return {
     success: true,
 
@@ -166,40 +443,18 @@ const processRecoveryCase = async ({
 
     risk,
 
-    diagnosis: diagnosisResult,
+    diagnosis:
+      diagnosisResult,
 
-    policy: policyResult,
+    policy:
+      policyResult,
 
-    action: actionResult,
+    action:
+      actionResult,
 
     recoveryCase:
       actionResult.recoveryCase
   };
-};
-
-/*
-|--------------------------------------------------------------------------
-| Payment lookup helper
-|--------------------------------------------------------------------------
-*/
-
-import Payment from "../models/Payment.js";
-
-const getPayment = async (
-  recoveryCase
-) => {
-  const payment =
-    await Payment.findById(
-      recoveryCase.paymentId
-    );
-
-  if (!payment) {
-    throw new Error(
-      "Payment not found for recovery case"
-    );
-  }
-
-  return payment;
 };
 
 export default processRecoveryCase;
