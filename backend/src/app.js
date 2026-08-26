@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 
+import recoveryRoutes from "./routes/recoveryRoutes.js";
+
 const app = express();
 
 app.use(
@@ -19,11 +21,9 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.get("/api/db-test", (req, res) => {
-  res.json({
-    success: true,
-    message: "Database layer is ready"
-  });
-});
+app.use(
+  "/api/recovery",
+  recoveryRoutes
+);
 
 export default app;
