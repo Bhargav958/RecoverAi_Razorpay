@@ -199,7 +199,7 @@ const seedDatabase = async () => {
     const customers = [];
 
     /*
-     * Rahul is intentionally the first customer.
+     * Amit is intentionally the first customer.
      * He will become our Golden Demo Case.
      */
 
@@ -262,24 +262,24 @@ const seedDatabase = async () => {
 
     console.log( `✅ ${insertedCustomers.length.toLocaleString()} customers created` );
 
-    const rahul =  insertedCustomers[0];
+    const amit =  insertedCustomers[0];
 
     /*
     |--------------------------------------------------------------------------
-    | Rahul historical successful payments
+    | Amit historical successful payments
     |--------------------------------------------------------------------------
     */
 
-    console.log( "💳 Creating Rahul's historical successful payments..." );
+    console.log( "💳 Creating Amit's historical successful payments..." );
 
-    const rahulHistoricalPayments = [];
+    const amitHistoricalPayments = [];
 
     for (let i = 1; i <= 12; i++) {
-      rahulHistoricalPayments.push({
+      amitHistoricalPayments.push({
         merchantId: merchant._id,
-        customerId: rahul._id,
-        razorpayPaymentId: `pay_demo_rahul_${String(i).padStart(3, "0")}`,
-        razorpayOrderId: `order_demo_rahul_${String(i).padStart(3, "0")}`,
+        customerId: amit._id,
+        razorpayPaymentId: `pay_demo_amit_${String(i).padStart(3, "0")}`,
+        razorpayOrderId: `order_demo_amit_${String(i).padStart(3, "0")}`,
         amount: 4999,
         currency: "INR",
         status: "CAPTURED",
@@ -291,7 +291,7 @@ const seedDatabase = async () => {
       });
     }
 
-    await Payment.insertMany( rahulHistoricalPayments );
+    await Payment.insertMany( amitHistoricalPayments );
 
     /*
     |--------------------------------------------------------------------------
@@ -309,11 +309,11 @@ const seedDatabase = async () => {
 
     for ( let i = 0; i < TOTAL_FAILED_PAYMENTS; i++ ) {
       /*
-       * Make Rahul's current failed payment the first failed event.
+       * Make Amit's current failed payment the first failed event.
        */
       const customer =
         i === 0
-          ? rahul
+          ? amit
           : insertedCustomers[
               (i % (insertedCustomers.length - 1)) + 1
             ];
@@ -411,7 +411,7 @@ const seedDatabase = async () => {
     }
 
     /*
-     * Rahul already has 12 historical successful
+     * Amit already has 12 historical successful
      * payments and 1 failed payment.
      */
     await Customer.bulkWrite(
@@ -705,7 +705,7 @@ const seedDatabase = async () => {
     );
 
     console.log(
-      `⭐ Golden case: Rahul Sharma — ₹4,999`
+      `⭐ Golden case: Amit Singh — ₹4,999`
     );
 
     console.log(
