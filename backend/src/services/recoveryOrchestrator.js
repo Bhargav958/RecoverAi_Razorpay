@@ -154,6 +154,7 @@ const processRecoveryCase = async ({
   const actionResult =
     await recoveryActionService({
       recoveryCase,
+      customer,
       policyResult,
       mode
     });

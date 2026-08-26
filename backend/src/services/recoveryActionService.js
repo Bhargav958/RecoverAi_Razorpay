@@ -3,6 +3,7 @@ import RecoveryCase from "../models/RecoveryCase.js";
 
 const recoveryActionService = async ({
   recoveryCase,
+  customer,
   policyResult,
   mode = "SIMULATION"
 }) => {
@@ -96,20 +97,26 @@ const recoveryActionService = async ({
   const actionType =
     policyResult.action;
 
-  const targetChannel =
-    actionType ===
-    "SEND_EMAIL"
-      ? "EMAIL"
-      : actionType ===
-          "SEND_SMS_OR_WHATSAPP"
-        ? "SMS"
-        : actionType ===
-            "SEND_PAYMENT_LINK"
-          ? "RAZORPAY"
-          : actionType ===
-              "HUMAN_ESCALATION"
-            ? "HUMAN"
-            : "RAZORPAY";
+  let targetChannel = "RAZORPAY";
+
+  if (actionType === "SEND_EMAIL") {
+    targetChannel = "EMAIL";
+  }
+
+  if (actionType === "SEND_SMS_OR_WHATSAPP") {
+    targetChannel =
+      customer?.preferredChannel === "WHATSAPP"
+        ? "WHATSAPP"
+        : "SMS";
+  }
+
+  if (actionType === "SEND_PAYMENT_LINK") {
+    targetChannel = "RAZORPAY";
+  }
+
+  if (actionType === "HUMAN_ESCALATION") {
+    targetChannel = "HUMAN";
+  }
 
   /*
   |--------------------------------------------------------------------------
@@ -147,7 +154,7 @@ const recoveryActionService = async ({
   if (mode === "SIMULATION") {
     const scheduledAt =
       policyResult.scheduledAt ||
-      new Date();
+      null
 
     const action =
       await RecoveryAction.create({
@@ -164,11 +171,16 @@ const recoveryActionService = async ({
         status:
           policyResult.scheduledAt
             ? "SCHEDULED"
-            : "PENDING",
+            : "EXECUTED",
 
         costTier,
 
-        scheduledAt
+        scheduledAt,
+
+        executedAt:
+        policyResult.scheduledAt
+          ? null
+          : new Date()
       });
 
     /*

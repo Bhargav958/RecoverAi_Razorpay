@@ -368,7 +368,7 @@ Analyze this case and return the structured diagnosis.
   try {
     const response =
       await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.6-flash",
 
         contents: prompt,
 
@@ -422,10 +422,11 @@ Analyze this case and return the structured diagnosis.
       diagnosis
     };
   } catch (error) {
-    console.error(
-      "Gemini diagnosis failed:",
-      error.message
-    );
+      console.error("\n========== GEMINI DIAGNOSIS ERROR ==========");
+      console.error("Message:", error.message);
+      console.error("Full error:", error);
+      console.error("============================================\n");
+    }
 
     return {
       source: "FALLBACK",
@@ -436,7 +437,6 @@ Analyze this case and return the structured diagnosis.
           customer
         })
     };
-  }
 };
 
 export {

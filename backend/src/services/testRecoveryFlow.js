@@ -8,6 +8,7 @@ import RecoveryAction from "../models/RecoveryAction.js";
 
 import executeRecoveryAction from "./actionExecutionService.js";
 import verifyRecovery from "./verificationService.js";
+import processRecoveryCase from "./recoveryOrchestrator.js";
 
 dotenv.config();
 
@@ -36,6 +37,11 @@ const runRecoveryFlow = async () => {
         "Recovery case not found"
       );
     }
+
+    await processRecoveryCase({
+      recoveryCaseId: recoveryCase._id,
+      mode: "SIMULATION"
+    });
 
     /*
      * Find the most recent action.

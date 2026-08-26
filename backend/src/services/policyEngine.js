@@ -8,7 +8,9 @@ import Policy from "../models/Policy.js";
 | The AI recommends an action.
 | This service decides whether that action is allowed.
 |
-| The AI never bypasses this layer.
+| IMPORTANT:
+| The AI never directly executes financial or communication actions.
+| Every recommendation passes through this policy layer.
 |
 |--------------------------------------------------------------------------
 */
@@ -36,6 +38,12 @@ const evaluatePolicy = async ({
     );
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Load merchant policy
+  |--------------------------------------------------------------------------
+  */
+
   const policy = await Policy.findOne({
     merchantId: recoveryCase.merchantId
   });
@@ -46,6 +54,12 @@ const evaluatePolicy = async ({
     );
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Extract AI recommendation
+  |--------------------------------------------------------------------------
+  */
+
   const {
     recommendedAction,
     confidence,
@@ -54,22 +68,58 @@ const evaluatePolicy = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Result object
+  | Base result
   |--------------------------------------------------------------------------
   */
 
   const result = {
     allowed: true,
+
     action: recommendedAction,
+
     scheduledAt: null,
+
     requiresHumanApproval: false,
-    reason: "Action is allowed by policy.",
+
+    reason: "Action is allowed by merchant policy.",
+
     violations: []
   };
 
   /*
   |--------------------------------------------------------------------------
-  | Rule 1 — Minimum AI confidence
+  | Communication action detection
+  |--------------------------------------------------------------------------
+  |
+  | IMPORTANT:
+  | This must be declared BEFORE it is used.
+  |
+  */
+
+  const communicationActionsRequested = [
+    "SEND_EMAIL",
+    "SEND_SMS_OR_WHATSAPP",
+    "SEND_PAYMENT_LINK"
+  ].includes(recommendedAction);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Count previous communication attempts
+  |--------------------------------------------------------------------------
+  */
+
+  const communicationActions =
+    recoveryCase.timeline.filter(
+      (event) =>
+        event.event === "EMAIL_SENT" ||
+        event.event === "SMS_SENT" ||
+        event.event === "WHATSAPP_SENT" ||
+        event.event === "PAYMENT_LINK_SENT"
+    ).length;
+
+  /*
+  |--------------------------------------------------------------------------
+  | RULE 1 — Minimum AI confidence
   |--------------------------------------------------------------------------
   */
 
@@ -81,8 +131,7 @@ const evaluatePolicy = async ({
 
     result.requiresHumanApproval = true;
 
-    result.action =
-      "HUMAN_ESCALATION";
+    result.action = "HUMAN_ESCALATION";
 
     result.reason =
       `AI confidence ${confidence}% is below the merchant minimum of ${policy.minimumAIConfidence}%.`;
@@ -96,20 +145,18 @@ const evaluatePolicy = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Rule 2 — Human escalation
+  | RULE 2 — Explicit human escalation
   |--------------------------------------------------------------------------
   */
 
   if (
-    recommendedAction ===
-    "HUMAN_ESCALATION"
+    recommendedAction === "HUMAN_ESCALATION"
   ) {
     result.allowed = true;
 
     result.requiresHumanApproval = true;
 
-    result.action =
-      "HUMAN_ESCALATION";
+    result.action = "HUMAN_ESCALATION";
 
     result.reason =
       "The AI recommends human escalation.";
@@ -119,29 +166,22 @@ const evaluatePolicy = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Rule 3 — High-value transactions
+  | RULE 3 — High-value case
   |--------------------------------------------------------------------------
+  |
+  | High-value recovery cases require human approval.
+  |
   */
 
   if (
     recoveryCase.amountAtRisk >=
     policy.humanEscalationThreshold
   ) {
-    /*
-     * Don't automatically retry or message high-value
-     * cases unless the merchant policy explicitly permits
-     * automated handling.
-     *
-     * For our initial safe implementation, require human
-     * approval.
-     */
-
     result.allowed = false;
 
     result.requiresHumanApproval = true;
 
-    result.action =
-      "HUMAN_ESCALATION";
+    result.action = "HUMAN_ESCALATION";
 
     result.reason =
       `Amount at risk ₹${recoveryCase.amountAtRisk.toLocaleString(
@@ -159,14 +199,17 @@ const evaluatePolicy = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Rule 4 — Maximum retry attempts
+  | RULE 4 — Retry payment
   |--------------------------------------------------------------------------
   */
 
   if (
-    recommendedAction ===
-    "RETRY_PAYMENT"
+    recommendedAction === "RETRY_PAYMENT"
   ) {
+    /*
+     * Maximum retry attempts.
+     */
+
     if (
       recoveryCase.attempts >=
       policy.maxRetries
@@ -186,7 +229,7 @@ const evaluatePolicy = async ({
     }
 
     /*
-     * Calculate next allowed retry time.
+     * Merchant's minimum retry interval.
      */
 
     const minimumRetryTime =
@@ -197,6 +240,10 @@ const evaluatePolicy = async ({
             60 *
             1000
       );
+
+    /*
+     * AI-requested delay.
+     */
 
     let requestedRetryTime =
       minimumRetryTime;
@@ -215,59 +262,31 @@ const evaluatePolicy = async ({
         );
 
       /*
-       * We choose the later of:
-       *
-       * AI requested delay
-       * Merchant minimum retry interval
+       * Never schedule earlier than the
+       * merchant's minimum retry interval.
        */
 
-      if (
+      requestedRetryTime =
         aiRequestedTime >
         minimumRetryTime
-      ) {
-        requestedRetryTime =
-          aiRequestedTime;
-      }
+          ? aiRequestedTime
+          : minimumRetryTime;
     }
 
     result.scheduledAt =
       requestedRetryTime;
 
     result.reason =
-      `Retry permitted. Next attempt scheduled after the merchant minimum retry interval of ${policy.minRetryIntervalHours} hours.`;
+      `Retry approved. Action scheduled according to the merchant minimum retry interval of ${policy.minRetryIntervalHours} hours.`;
 
     return result;
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Rule 5 — Communication limits
+  | RULE 5 — Communication limit
   |--------------------------------------------------------------------------
-  |
-  | Count previous communication actions from the RecoveryCase
-  | timeline. For now we use timeline events as the source.
-  |
   */
-
-  const communicationActions =
-    recoveryCase.timeline.filter(
-      (event) =>
-        event.event ===
-          "EMAIL_SENT" ||
-        event.event ===
-          "SMS_SENT" ||
-        event.event ===
-          "WHATSAPP_SENT" ||
-        event.event ===
-          "PAYMENT_LINK_SENT"
-    ).length;
-
-  const communicationActionsRequested =
-    [
-      "SEND_EMAIL",
-      "SEND_SMS_OR_WHATSAPP",
-      "SEND_PAYMENT_LINK"
-    ].includes(recommendedAction);
 
   if (
     communicationActionsRequested &&
@@ -290,13 +309,50 @@ const evaluatePolicy = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Rule 6 — Payment link / communication
+  | RULE 6 — Delayed communication
   |--------------------------------------------------------------------------
+  |
+  | Example:
+  |
+  | AI:
+  | SEND_SMS_OR_WHATSAPP
+  | delayHours = 24
+  |
+  | Policy:
+  | Allowed
+  |
+  | Result:
+  | scheduledAt = now + 24 hours
+  |
   */
 
   if (
-    communicationActionsRequested
+    communicationActionsRequested &&
+    typeof delayHours === "number" &&
+    delayHours > 0
   ) {
+    result.scheduledAt =
+      new Date(
+        Date.now() +
+          delayHours *
+            60 *
+            60 *
+            1000
+      );
+
+    result.reason =
+      `Communication action scheduled after ${delayHours} hour(s) according to the AI recommendation.`;
+
+    return result;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | RULE 7 — Immediate communication
+  |--------------------------------------------------------------------------
+  */
+
+  if (communicationActionsRequested) {
     result.allowed = true;
 
     result.reason =
@@ -307,7 +363,7 @@ const evaluatePolicy = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Rule 7 — Explicit STOP recommendation
+  | RULE 8 — Explicit STOP
   |--------------------------------------------------------------------------
   */
 
@@ -326,7 +382,7 @@ const evaluatePolicy = async ({
 
   /*
   |--------------------------------------------------------------------------
-  | Default
+  | DEFAULT
   |--------------------------------------------------------------------------
   */
 

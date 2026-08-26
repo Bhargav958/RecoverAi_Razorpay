@@ -39,6 +39,19 @@ const verifyRecovery = async ({
     );
   }
 
+  if (action.status === "SUCCEEDED") {
+    return {
+      success: true,
+      recovered: true,
+      amountRecovered:
+        action.amountRecovered ||
+        recoveryCase.amountRecovered,
+      action,
+      recoveryCase,
+      payment
+    };
+  }
+
   /*
   |--------------------------------------------------------------------------
   | Only executed actions can be verified
