@@ -1,42 +1,115 @@
-import { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-function App() {
-  const [backendStatus, setBackendStatus] = useState("Checking...");
+import AppLayout from "./layouts/AppLayout.jsx";
 
-  useEffect(() => {
-    fetch("http://localhost:5000/api/health")
-      .then((res) => res.json())
-      .then((data) => {
-        setBackendStatus(data.message);
-      })
-      .catch(() => {
-        setBackendStatus("Backend unavailable");
-      });
-  }, []);
+import DashboardPage from "./pages/DashboardPage.jsx";
 
+const Placeholder = ({title}) => {
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+    <div className="flex min-h-[60vh] items-center justify-center">
       <div className="text-center">
-        <h1 className="text-5xl font-bold tracking-tight">
+        <p className="text-sm text-slate-500">
           RecoverAI
-        </h1>
-
-        <p className="mt-3 text-slate-400">
-          AI Revenue Recovery Platform
         </p>
 
-        <div className="mt-8 rounded-xl border border-slate-800 bg-slate-900 px-6 py-4">
-          <p className="text-sm text-slate-400">
-            Backend Status
-          </p>
+        <h1 className="mt-2 text-3xl font-semibold">
+          {title}
+        </h1>
 
-          <p className="mt-1 text-green-400">
-            {backendStatus}
-          </p>
-        </div>
+        <p className="mt-2 text-slate-500">
+          This module is coming next.
+        </p>
       </div>
     </div>
   );
-}
+};
+
+const App = () => {
+  return (
+    <BrowserRouter>
+
+      <Routes>
+
+        <Route
+          element={<AppLayout />}
+        >
+
+          <Route
+            path="/"
+            element={
+              <DashboardPage />
+            }
+          />
+
+          <Route
+            path="/revenue-risk"
+            element={
+              <Placeholder title="Revenue Risk" />
+            }
+          />
+
+          <Route
+            path="/command-center"
+            element={
+              <Placeholder title="Recovery Command Center" />
+            }
+          />
+
+          <Route
+            path="/customers"
+            element={
+              <Placeholder title="Customers" />
+            }
+          />
+
+          <Route
+            path="/payments"
+            element={
+              <Placeholder title="Payments" />
+            }
+          />
+
+          <Route
+            path="/agent-activity"
+            element={
+              <Placeholder title="Agent Activity" />
+            }
+          />
+
+          <Route
+            path="/analytics"
+            element={
+              <Placeholder title="Analytics" />
+            }
+          />
+
+          <Route
+            path="/policies"
+            element={
+              <Placeholder title="Policies" />
+            }
+          />
+
+          <Route
+            path="/audit"
+            element={
+              <Placeholder title="Audit Trail" />
+            }
+          />
+
+          <Route
+            path="/settings"
+            element={
+              <Placeholder title="Settings" />
+            }
+          />
+
+        </Route>
+
+      </Routes>
+
+    </BrowserRouter>
+  );
+};
 
 export default App;
