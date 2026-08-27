@@ -5,6 +5,8 @@ import recoveryRoutes from "./routes/recoveryRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js"
 import workerRoutes from "./routes/workerRoutes.js"
 
+import simulationRoutes from "./routes/simulationRoutes.js";
+
 const app = express();
 
 app.use(
@@ -28,15 +30,20 @@ app.use(
   dashboardRoutes
 );
 
-app.use(
-  "/api/recovery/worker",
-  workerRoutes
-)
-
 
 app.use(
   "/api/recovery",
   recoveryRoutes
+);
+
+app.use(
+  "/api/recovery/worker",
+  workerRoutes
+);
+
+app.use(
+  "/api/simulation",
+  simulationRoutes
 );
 
 export default app;
