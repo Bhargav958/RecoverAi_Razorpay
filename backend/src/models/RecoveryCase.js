@@ -20,6 +20,7 @@ const recoveryCaseSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Payment",
       required: true,
+      unique: true,
       index: true
     },
 
