@@ -7,10 +7,11 @@ import Merchant from "../models/Merchant.js";
 import Customer from "../models/Customer.js";
 import Payment from "../models/Payment.js";
 import RecoveryCase from "../models/RecoveryCase.js";
-import Policy from "../models/Policy.js";
-
 import RecoveryAction from "../models/RecoveryAction.js";
+import Policy from "../models/Policy.js";
 import AuditLog from "../models/AuditLog.js";
+
+import { calculateRisk } from "../services/riskEngine.js";
 
 dotenv.config();
 
@@ -25,65 +26,177 @@ const TOTAL_FAILED_PAYMENTS = 250;
 
 /*
 |--------------------------------------------------------------------------
-| Helper data
+| Demo customer names
+|--------------------------------------------------------------------------
+|
+| Large enough pool so the Command Center does not look like
+| the same few customers are repeatedly appearing.
+|
 |--------------------------------------------------------------------------
 */
 
 const firstNames = [
-  "Amit",
-  "Gonenedra",
-  "Bhargav",
-  "Raghubar",
-  "Tejesh",
-  "Mohan",
-  "Punith",
-  "Praneetha",
-  "Avidha",
-  "Sneha",
+  "Aarav",
+  "Aditi",
+  "Aditya",
+  "Akash",
+  "Akshay",
+  "Aman",
+  "Amita",
+  "Amol",
+  "Ananya",
+  "Aniket",
+  "Anirudh",
+  "Anjali",
+  "Ankit",
+  "Ankita",
+  "Arjun",
+  "Arnav",
+  "Arpita",
+  "Aryan",
+  "Ashish",
+  "Avinash",
+  "Ayush",
+  "Bhavna",
+  "Chetan",
+  "Deepak",
+  "Deepika",
+  "Dhruv",
+  "Diya",
+  "Esha",
+  "Gaurav",
+  "Harish",
+  "Ishaan",
+  "Isha",
+  "Jatin",
   "Karan",
-  "Meera"
+  "Kavya",
+  "Kartik",
+  "Kavita",
+  "Kiran",
+  "Krishna",
+  "Manish",
+  "Meera",
+  "Mohit",
+  "Naina",
+  "Naman",
+  "Neha",
+  "Nikhil",
+  "Nisha",
+  "Pallavi",
+  "Pankaj",
+  "Pooja",
+  "Pranav",
+  "Prateek",
+  "Priya",
+  "Rahul",
+  "Rakesh",
+  "Rhea",
+  "Rishabh",
+  "Ritika",
+  "Rohan",
+  "Rohit",
+  "Sakshi",
+  "Sameer",
+  "Sanjay",
+  "Sanya",
+  "Sarika",
+  "Shivam",
+  "Shreya",
+  "Siddharth",
+  "Sneha",
+  "Sonal",
+  "Sourabh",
+  "Sumit",
+  "Tanvi",
+  "Tarun",
+  "Tanya",
+  "Varun",
+  "Vikas",
+  "Vikram",
+  "Vineet",
+  "Yash",
+  "Zoya"
 ];
 
 const lastNames = [
-  "Singh",
-  "Verma",
+  "Agarwal",
+  "Ahluwalia",
+  "Bansal",
+  "Batra",
+  "Bhatt",
+  "Bose",
+  "Chakraborty",
+  "Chandra",
+  "Chauhan",
+  "Das",
+  "Desai",
+  "Dutta",
+  "Ghosh",
+  "Goel",
+  "Goyal",
+  "Gupta",
+  "Iyer",
+  "Jain",
+  "Jaiswal",
+  "Joshi",
+  "Kapur",
+  "Kapoor",
+  "Khan",
+  "Kohli",
+  "Kulkarni",
+  "Malhotra",
   "Mehta",
-  "Mohammed",
+  "Menon",
+  "Mishra",
+  "Mukherjee",
+  "Nair",
+  "Naik",
+  "Narayanan",
+  "Patel",
+  "Pillai",
+  "Prasad",
   "Rao",
   "Reddy",
-  "Kumar",
-  "Reddy",
-  "Shaik",
-  "Joshi",
+  "Roy",
+  "Saxena",
+  "Sethi",
+  "Shah",
+  "Sharma",
+  "Shetty",
   "Singh",
-  "Malhotra"
+  "Sinha",
+  "Srivastava",
+  "Subramanian",
+  "Tandon",
+  "Tripathi",
+  "Trivedi",
+  "Varma",
+  "Verma",
+  "Yadav",
+  "Yadav"
 ];
 
 const failureTypes = [
   {
     code: "BANK_TEMPORARY_FAILURE",
-    reason: "Temporary bank-side payment failure",
-    rootCause: "TEMPORARY_BANK_FAILURE"
+    reason: "Temporary bank-side payment failure"
   },
   {
     code: "CARD_EXPIRED",
-    reason: "Payment method has expired",
-    rootCause: "EXPIRED_PAYMENT_METHOD"
+    reason: "Payment method has expired"
   },
   {
     code: "INSUFFICIENT_FUNDS",
-    reason: "Insufficient funds",
-    rootCause: "INSUFFICIENT_FUNDS"
+    reason: "Insufficient funds"
   },
   {
     code: "AUTHENTICATION_FAILED",
-    reason: "Payment authentication failed",
-    rootCause: "AUTHENTICATION_FAILURE"
+    reason: "Payment authentication failed"
   },
   {
     code: "GATEWAY_TIMEOUT",
-    reason: "Payment gateway timeout",
-    rootCause: "GATEWAY_TIMEOUT"
+    reason: "Payment gateway timeout"
   }
 ];
 
@@ -94,61 +207,80 @@ const paymentMethods = [
   "wallet"
 ];
 
-const amountPattern = [
-  499,
-  999,
-  2999,
-  4999,
-  4999,
-  4999,
-  4999,
-  9999,
-  24999
-];
+/*
+|--------------------------------------------------------------------------
+| Generate demo customer name
+|--------------------------------------------------------------------------
+*/
+
+const generateCustomerName = (index) => {
+  const firstName =
+    firstNames[
+      index % firstNames.length
+    ];
+
+  const lastName =
+    lastNames[
+      Math.floor(index / firstNames.length) %  lastNames.length
+    ];
+
+  return `${firstName} ${lastName}`;
+};
 
 /*
 |--------------------------------------------------------------------------
-| Main seed function
+| Main seed
 |--------------------------------------------------------------------------
 */
 
 const seedDatabase = async () => {
   try {
-    console.log("\n🚀 Starting RecoverAI database seed...\n");
+    console.log( "\n🚀 Starting RecoverAI database seed...\n" );
 
     await connectDB();
 
     /*
     |--------------------------------------------------------------------------
-    | Remove previous demo merchant
+    | Remove previous demo data
     |--------------------------------------------------------------------------
     */
 
-    console.log("🧹 Removing previous Acme SaaS demo data...");
-
-    const existingMerchant = await Merchant.findOne({
-      businessName: "Acme SaaS"
-    });
+    const existingMerchant =
+      await Merchant.findOne({
+        businessName: "Acme SaaS"
+      });
 
     if (existingMerchant) {
-      console.log("🧹 Removing previous Acme SaaS demo data...");
+      console.log( "🧹 Removing previous Acme SaaS demo data..." );
+
+      /*
+       * Delete audit logs first.
+       */
 
       await AuditLog.deleteMany({
         merchantId: existingMerchant._id
       });
 
+      /*
+       * Find old recovery cases so their actions
+       * can also be removed.
+       */
+
       const oldRecoveryCases =
         await RecoveryCase.find({
-          merchantId: existingMerchant._id
+          merchantId:
+            existingMerchant._id
         }).select("_id");
 
-      const recoveryCaseIds =
-        oldRecoveryCases.map((item) => item._id);
+      const oldRecoveryCaseIds =
+        oldRecoveryCases.map(
+          (item) => item._id
+        );
 
-      if (recoveryCaseIds.length > 0) {
+      if ( oldRecoveryCaseIds.length > 0 ) {
         await RecoveryAction.deleteMany({
           recoveryCaseId: {
-            $in: recoveryCaseIds
+            $in: oldRecoveryCaseIds
           }
         });
       }
@@ -158,7 +290,7 @@ const seedDatabase = async () => {
       });
 
       await Payment.deleteMany({
-        merchantId: existingMerchant._id
+        merchantId:  existingMerchant._id
       });
 
       await Customer.deleteMany({
@@ -180,34 +312,48 @@ const seedDatabase = async () => {
     |--------------------------------------------------------------------------
     */
 
-    console.log("🏢 Creating Acme SaaS merchant...");
+    console.log( "🏢 Creating Acme SaaS merchant..." );
 
-    const merchant = await Merchant.create({
-      name: "RecoverAI Demo Merchant",
-      businessName: "Acme SaaS",
-      email: "admin@acmesaas.demo",
-      currency: "INR",
-      razorpayConnected: false,
-      razorpayMode: "test",
-      isActive: true
-    });
+    const merchant =
+      await Merchant.create({
+        name: "RecoverAI Demo Merchant",
+
+        businessName: "Acme SaaS",
+
+        email: "admin@acmesaas.demo",
+
+        currency: "INR",
+
+        razorpayConnected: false,
+
+        razorpayMode: "test",
+
+        isActive: true
+      });
 
     /*
     |--------------------------------------------------------------------------
-    | Create default policy
+    | Create default recovery policy
     |--------------------------------------------------------------------------
     */
 
-    console.log("🛡️ Creating default recovery policy...");
+    console.log( "🛡️ Creating default recovery policy..." );
 
     await Policy.create({
-      merchantId: merchant._id,
+      merchantId:  merchant._id,
+
       maxRetries: 3,
+
       minRetryIntervalHours: 6,
+
       maxMessages: 3,
+
       minMessageIntervalHours: 24,
+
       recoveryWindowDays: 7,
+
       humanEscalationThreshold: 25000,
+
       minimumAIConfidence: 60
     });
 
@@ -217,138 +363,197 @@ const seedDatabase = async () => {
     |--------------------------------------------------------------------------
     */
 
-    console.log(
-      `👥 Creating ${TOTAL_CUSTOMERS.toLocaleString()} customers...`
-    );
+    console.log( `👥 Creating ${TOTAL_CUSTOMERS.toLocaleString()} customers...` );
 
     const customers = [];
 
     /*
-     * Amit is intentionally the first customer.
-     * He will become our Golden Demo Case.
+     * Amit is our Golden Case.
      */
 
     customers.push({
       merchantId: merchant._id,
+
       name: "Amit Singh",
-      email: "amit.singh@example.demo",
+
+      email:  "amit.singh@example.demo",
+
       phone: "+919800000001",
 
       lifetimeValue: 74985,
 
+      /*
+       * 12 historical successful
+       * + 1 current failed
+       * = 13 total
+       */
+
       totalPayments: 13,
+
       successfulPayments: 12,
+
       failedPayments: 1,
+
       previousRecoveries: 2,
 
       segment: "HIGH_VALUE_HIGH_RECOVERABILITY",
+
       preferredChannel: "WHATSAPP",
+
       subscriptionStatus: "ACTIVE",
+
       recoveryProbability: 87
     });
 
-    for(let i=1; i<TOTAL_CUSTOMERS; i++){
-      const firstName = firstNames[i % firstNames.length];
-      const lastName = lastNames[i % lastNames.length];
+    /*
+     * Remaining customers.
+     */
 
-      const name = `${firstName} ${lastName}`;
+    for ( let i = 1; i < TOTAL_CUSTOMERS; i++ ) {
+      const name = generateCustomerName(i);
 
-      const lifetimeValue = 999 + ((i * 137) % 249000);
+      const lifetimeValue = 999 +  ((i * 137) % 249000);
 
       let segment;
-      if (lifetimeValue >= 50000) {
-        segment = i % 3 === 0
-                            ? "HIGH_VALUE_HIGH_RECOVERABILITY"
-                            : "HIGH_VALUE_LOW_RECOVERABILITY";
+
+      if ( lifetimeValue >= 100000 ) {
+        segment =
+          i % 3 === 0
+            ? "HIGH_VALUE_HIGH_RECOVERABILITY"
+            : "HIGH_VALUE_LOW_RECOVERABILITY";
       } else {
-        segment = i % 4 === 0
-                            ? "LOW_VALUE_LOW_RECOVERABILITY"
-                            : "LOW_VALUE_HIGH_RECOVERABILITY";
+        segment =
+          i % 4 === 0
+            ? "LOW_VALUE_LOW_RECOVERABILITY"
+            : "LOW_VALUE_HIGH_RECOVERABILITY";
       }
 
       customers.push({
         merchantId: merchant._id,
+
         name,
+
         email: `customer${i + 1}@demo.recoverai.local`,
-        phone: `+9198${String(10000000 + i).slice(-8)}`,
+
+        phone:
+          `+9198${String(
+            10000000 + i
+          ).slice(-8)}`,
+
         lifetimeValue,
+
         totalPayments: 0,
+
         successfulPayments: 0,
+
         failedPayments: 0,
-        previousRecoveries: i % 7 === 0 ? 1 : 0,
+
+        previousRecoveries:  i % 17 === 0 ? 1 : 0,
+
         segment,
-        preferredChannel: i % 3 === 0  ? "WHATSAPP" :  i % 3 === 1 ? "EMAIL" : "SMS",
-        subscriptionStatus:  i % 5 === 0 ? "ACTIVE" : "NONE",
+
+        preferredChannel:
+          i % 3 === 0
+            ? "WHATSAPP"
+            : i % 3 === 1
+              ? "EMAIL"
+              : "SMS",
+
+        subscriptionStatus: i % 5 === 0  ? "ACTIVE"  : "NONE",
+
         recoveryProbability:  40 + (i % 56)
       });
     }
 
-    const insertedCustomers =  await Customer.insertMany(customers);
+    const insertedCustomers =
+      await Customer.insertMany(
+        customers
+      );
 
-    console.log( `✅ ${insertedCustomers.length.toLocaleString()} customers created` );
-
-    const amit =  insertedCustomers[0];
+    console.log(  `✅ ${insertedCustomers.length.toLocaleString()} customers created`  );
 
     /*
     |--------------------------------------------------------------------------
-    | Amit historical successful payments
+    | Amit's historical successful payments
     |--------------------------------------------------------------------------
     */
+
+    const amit = insertedCustomers[0];
 
     console.log( "💳 Creating Amit's historical successful payments..." );
 
     const amitHistoricalPayments = [];
 
-    for (let i = 1; i <= 12; i++) {
+    for (  let i = 1; i <= 12; i++ ) {
       amitHistoricalPayments.push({
         merchantId: merchant._id,
+
         customerId: amit._id,
-        razorpayPaymentId: `pay_demo_amit_${String(i).padStart(3, "0")}`,
-        razorpayOrderId: `order_demo_amit_${String(i).padStart(3, "0")}`,
+
+        razorpayPaymentId:
+          `pay_demo_amit_${String(
+            i
+          ).padStart(3, "0")}`,
+
+        razorpayOrderId:
+          `order_demo_amit_${String(
+            i
+          ).padStart(3, "0")}`,
+
         amount: 4999,
-        currency: "INR",
+
+        currency:  "INR",
+
         status: "CAPTURED",
+
         method: "upi",
+
         isSimulation: true,
-        paidAt: new Date(
-          Date.now() - i * 30 * 24 * 60 * 60 * 1000
-        )
+
+        paidAt:
+          new Date(
+            Date.now() -  i *  30 *  24 *  60 *  60 *  1000
+          )
       });
     }
 
-    await Payment.insertMany( amitHistoricalPayments );
+    await Payment.insertMany(
+      amitHistoricalPayments
+    );
 
     /*
     |--------------------------------------------------------------------------
-    | Create 250 failed payments
+    | Create failed payments
     |--------------------------------------------------------------------------
+    |
+    | First 250 customers receive one failed payment.
+    |
+    | This makes Command Center cases mostly unique by customer
+    | while still preserving realistic customer histories.
+    |
     */
 
-    console.log(
-      `❌ Creating ${TOTAL_FAILED_PAYMENTS} failed payment events...`
-    );
+    console.log( `❌ Creating ${TOTAL_FAILED_PAYMENTS} failed payment events...` );
 
     const failedPayments = [];
 
     let totalAtRisk = 0;
 
-    for ( let i = 0; i < TOTAL_FAILED_PAYMENTS; i++ ) {
+    for ( let i = 0;  i < TOTAL_FAILED_PAYMENTS; i++ ) {
       /*
-       * Make Amit's current failed payment the first failed event.
+       * Amit is index 0.
+       * Every other failed payment uses a distinct customer.
        */
-      const customer =
-        i === 0
-          ? amit
-          : insertedCustomers[
-              (i % (insertedCustomers.length - 1)) + 1
-            ];
+
+      const customer =  i === 0  ? amit : insertedCustomers[i];
+
+      let amount;
 
       /*
-       * Most demo payments are ₹4,999.
-       * The final amounts are adjusted so that
-       * the total revenue at risk is exactly ₹12,48,500.
+       * Preserve exact baseline:
+       *
+       * ₹12,48,500
        */
-      let amount;
 
       if (i < 248) {
         amount = 4999;
@@ -358,88 +563,131 @@ const seedDatabase = async () => {
         amount = 4999;
       }
 
+      /*
+       * Amit gets the temporary bank failure.
+       */
+
       const failure =
         i === 0
           ? failureTypes[0]
-          : failureTypes[i % failureTypes.length];
+          : failureTypes[
+              i %
+                failureTypes.length
+            ];
 
       const payment = {
         merchantId: merchant._id,
+
         customerId: customer._id,
 
-        razorpayPaymentId: `pay_demo_failed_${String(i + 1).padStart(4, "0")}`,
+        razorpayPaymentId:
+          `pay_demo_failed_${String(
+            i + 1
+          ).padStart(4, "0")}`,
 
-        razorpayOrderId: `order_demo_failed_${String(i + 1).padStart(4, "0")}`,
+        razorpayOrderId:
+          `order_demo_failed_${String(
+            i + 1
+          ).padStart(4, "0")}`,
+
         amount,
+
         currency: "INR",
+
         status: "FAILED",
+
         method:
           paymentMethods[
             i % paymentMethods.length
           ],
 
         failureCode: failure.code,
+
         failureReason: failure.reason,
+
         isSimulation: true,
 
-        createdAt: new Date(
-          Date.now() -
-            (i % 14) * 24 * 60 * 60 * 1000
-        )
+        createdAt:
+          new Date(
+            Date.now() -  (i % 14) * 24 *  60 *  60 *  1000
+          )
       };
 
-      failedPayments.push(payment);
+      failedPayments.push(
+        payment
+      );
 
-      totalAtRisk += amount;
+      totalAtRisk +=  amount;
     }
 
-    const insertedPayments = 
+    const insertedPayments =
       await Payment.insertMany(
         failedPayments
       );
 
-    console.log(
-      `✅ ${insertedPayments.length} failed payments created`
-    );
+    console.log(  `✅ ${insertedPayments.length} failed payments created`  );
 
     console.log(
-      `💰 Total revenue at risk: ₹${totalAtRisk.toLocaleString("en-IN")}`
+      `💰 Total revenue at risk: ₹${totalAtRisk.toLocaleString(
+        "en-IN"
+      )}`
     );
 
     /*
     |--------------------------------------------------------------------------
     | Update customer statistics
     |--------------------------------------------------------------------------
+    |
+    | Amit already includes his current failed payment
+    | in his initial statistics.
+    |
+    |--------------------------------------------------------------------------
     */
 
-    console.log(
-      "📊 Updating customer payment statistics..."
-    );
+    console.log( "📊 Updating customer payment statistics..." );
 
     const customerUpdates = [];
 
-    for (const payment of insertedPayments) {
-      /*
-      * Amit already has his current failed payment represented
-      * in his initial statistics, so do not increment him again.
-      */
+    for ( let i = 0; i < insertedPayments.length; i++ ) {
+      const payment = insertedPayments[i];
 
-      if (
-        payment.customerId.toString() ===
-        amit._id.toString()
-      ) {
+      /*
+       * Amit already has:
+       *
+       * totalPayments = 13
+       * successfulPayments = 12
+       * failedPayments = 1
+       *
+       * Therefore don't increment his values again.
+       */
+
+      if (  payment.customerId.toString() ===  amit._id.toString() ) {
         continue;
       }
+
+      /*
+       * Update in-memory customer object too.
+       * We need those updated statistics immediately
+       * when calculating the risk score below.
+       */
+
+      const customer = insertedCustomers[i];
+
+      customer.totalPayments += 1;
+
+      customer.failedPayments += 1;
 
       customerUpdates.push({
         updateOne: {
           filter: {
-            _id: payment.customerId
+            _id:
+              customer._id
           },
 
           update: {
             $inc: {
               totalPayments: 1,
+
               failedPayments: 1
             }
           }
@@ -447,156 +695,54 @@ const seedDatabase = async () => {
       });
     }
 
-    if (customerUpdates.length > 0) {
+    if ( customerUpdates.length > 0 ) {
       await Customer.bulkWrite(
         customerUpdates
       );
     }
 
     /*
-     * Amit already has 12 historical successful
-     * payments and 1 failed payment.
-     */
-    await Customer.bulkWrite(
-      customerUpdates
-    );
-
-    /*
     |--------------------------------------------------------------------------
-    | Create recovery cases
+    | Create Recovery Cases
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    |
+    | Risk metrics ARE calculated during seed so cases can be
+    | prioritized in the Command Center.
+    |
+    | AI diagnosis fields remain untouched.
+    |
     |--------------------------------------------------------------------------
     */
 
-    console.log(
-      "🤖 Creating recovery cases..."
-    );
+    console.log( "🧠 Calculating risk and creating recovery cases..." );
 
     const recoveryCases = [];
 
     for ( let i = 0; i < insertedPayments.length; i++ ) {
       const payment = insertedPayments[i];
-      const customer = 
-        insertedCustomers.find(
-          (c) =>
-            c._id.toString() ===
-            payment.customerId.toString()
-        );
 
-      const failure =
-        i === 0
-          ? failureTypes[0]
-          : failureTypes[
-              i % failureTypes.length
-            ];
-
-      let recoveryProbability;
-      let riskScore;
-      let recommendedAction;
-      let priorityScore;
-      let evidence;
+      const customer = insertedCustomers[i];
 
       /*
-       * GOLDEN CASE
+       * Calculate deterministic risk.
        */
-      if (i === 0) {
-        recoveryProbability = 87;
-        riskScore = 82;
-        recommendedAction = "RETRY_PAYMENT";
-        priorityScore = 4350;
 
-        evidence = [
-          "Customer has 12 previous successful payments",
-          "Payment method is still valid",
-          "Current failure appears temporary",
-          "Strong customer payment history",
-          "Retry is allowed by merchant policy"
-        ];
-      }
+      const risk =
+        calculateRisk({
+          payment,
+          customer
+        });
 
       /*
-       * Expired payment method
+       * Initial timeline contains only facts known at detection.
        */
-      else if ( failure.rootCause ===  "EXPIRED_PAYMENT_METHOD" ) {
-        recoveryProbability = 72 + (i % 15);
-
-        riskScore = 70 + (i % 20);
-
-        recommendedAction = "REQUEST_PAYMENT_METHOD_UPDATE";
-
-        priorityScore = payment.amount * (recoveryProbability / 100);
-
-        evidence = [
-          "Payment method appears expired",
-          "Retrying without updating payment method has low value",
-          "Customer should update payment details"
-        ];
-      }
-
-      /*
-       * High-value customer
-       */
-      else if ( payment.amount >= 24999 || customer.lifetimeValue >= 100000 ) {
-        recoveryProbability = 55 + (i % 30);
-
-        riskScore = 75 + (i % 20);
-
-        recommendedAction = "HUMAN_ESCALATION";
-
-        priorityScore = payment.amount * (recoveryProbability / 100);
-
-        evidence = [
-          "High-value revenue is at risk",
-          "Human intervention is justified",
-          "Case exceeds automated escalation threshold"
-        ];
-      }
-
-      /*
-       * Temporary failure
-       */
-      else if ( failure.rootCause === "TEMPORARY_BANK_FAILURE" ) {
-        recoveryProbability = 65 + (i % 30);
-
-        riskScore = 65 + (i % 25);
-
-        recommendedAction = "RETRY_PAYMENT";
-
-        priorityScore = payment.amount * (recoveryProbability / 100);
-
-        evidence = [
-          "Failure appears temporary",
-          "Retry may recover payment",
-          "Automated retry is within policy"
-        ];
-      }
-
-      /*
-       * Insufficient funds / other
-       */
-      else {
-        recoveryProbability = 35 + (i % 35);
-
-        riskScore = 50 + (i % 35);
-
-        recommendedAction = "SEND_PAYMENT_LINK";
-
-        priorityScore =  payment.amount * (recoveryProbability / 100);
-
-        evidence = [
-          "Payment failed",
-          "Customer requires a new payment attempt",
-          "Payment link provides a low-cost recovery path"
-        ];
-      }
-
-      const expectedRecovery =
-        Math.round(
-          payment.amount * (recoveryProbability / 100)
-        );
 
       const timeline = [
         {
           event: "REVENUE_RISK_DETECTED",
+
           description:
             `₹${payment.amount.toLocaleString(
               "en-IN"
@@ -607,87 +753,74 @@ const seedDatabase = async () => {
 
         {
           event: "CASE_CREATED",
-          description:
-            "Recovery case created for AI analysis",
 
-          timestamp: new Date(
-            payment.createdAt.getTime() + 1000
-          )
+          description: "Recovery case created for AI analysis.",
+
+          timestamp: new Date( payment.createdAt.getTime() +  1000    )
         }
       ];
 
-      // if (i === 0) {
-      //   timeline.push(
-      //     {
-      //       event: "ROOT_CAUSE_IDENTIFIED",
-      //       description:
-      //         "Temporary bank failure detected with 91% confidence",
-
-      //       timestamp: new Date(
-      //         payment.createdAt.getTime() +
-      //           2000
-      //       )
-      //     },
-
-      //     {
-      //       event: "RECOVERY_DECISION",
-      //       description:
-      //         "Retry after 6 hours selected by AI",
-
-      //       timestamp: new Date(
-      //         payment.createdAt.getTime() +
-      //           3000
-      //       )
-      //     }
-      //   );
-      // }
+      /*
+       * IMPORTANT:
+       *
+       * rootCause is UNKNOWN because AI has not analyzed
+       * the case yet.
+       *
+       * recommendedAction is intentionally omitted.
+       *
+       * aiReason/evidence are empty.
+       */
 
       const recoveryCase = {
         merchantId: merchant._id,
 
-        customerId : payment.customerId,
+        customerId:  payment.customerId,
 
         paymentId: payment._id,
 
         amountAtRisk: payment.amount,
 
-        riskScore,
+        /*
+         * Deterministic risk information.
+         */
 
-        recoveryProbability,
+        riskScore:  risk.riskScore,
 
-        expectedRecovery,
+        recoveryProbability:  risk.recoveryProbability,
 
-        priorityScore,
+        expectedRecovery:  risk.expectedRecovery,
 
-        rootCause: failure.rootCause,
+        priorityScore: risk.priorityScore,
 
-        diagnosisConfidence: i === 0 ? 91 : 70 + (i % 25),
+        /*
+         * AI has not run yet.
+         */
 
-        recommendedAction,
+        rootCause: "UNKNOWN",
 
-        currentAction: recommendedAction,
+        diagnosisConfidence: 0,
 
-        status: "DETECTED",
+        recommendedAction:  undefined,
 
-        attempts: 0,
+        currentAction:  undefined,
 
-        amountRecovered: 0,
+        /*
+         * Case is waiting for agent analysis.
+         */
 
-        nextActionAt:
-          recommendedAction ===
-          "RETRY_PAYMENT"
-            ? new Date(
-                Date.now() +
-                  6 * 60 * 60 * 1000
-              )
-            : undefined,
+        status:  "DETECTED",
 
-        aiReason:
-          i === 0
-            ? "Strong historical payment behavior and a temporary failure pattern make retry the most appropriate recovery action."
-            : `AI recommends ${recommendedAction.toLowerCase()} based on the detected failure and customer context.`,
+        attempts:  0,
 
-        evidence,
+        amountRecovered:  0,
+
+        nextActionAt: null,
+
+        stoppedReason: undefined,
+
+        aiReason:  undefined,
+
+        evidence:  [],
 
         timeline
       };
@@ -701,68 +834,44 @@ const seedDatabase = async () => {
       recoveryCases
     );
 
-    console.log(
-      `✅ ${recoveryCases.length} recovery cases created`
-    );
+    console.log( `✅ ${recoveryCases.length} recovery cases created` );
 
     /*
     |--------------------------------------------------------------------------
-    | Final summary
+    | Final Summary
     |--------------------------------------------------------------------------
     */
 
     console.log("\n");
-    console.log(
-      "══════════════════════════════════════"
-    );
-    console.log(
-      "        RECOVERAI SEED COMPLETE"
-    );
-    console.log(
-      "══════════════════════════════════════"
+
+    console.log(  "══════════════════════════════════════"  );
+
+    console.log(   "        RECOVERAI SEED COMPLETE"  );
+
+    console.log( "══════════════════════════════════════" );
+
+    console.log(  `🏢 Merchant: ${merchant.businessName}`  );
+
+    console.log(  `👥 Customers: ${insertedCustomers.length.toLocaleString()}`  );
+
+    console.log(  `❌ Failed payments: ${insertedPayments.length}` );
+
+    console.log ( `🤖 Recovery cases: ${recoveryCases.length}` );
+
+    console.log( `💰 Revenue at risk: ₹${totalAtRisk.toLocaleString(  "en-IN"  )}`
     );
 
-    console.log(
-      `🏢 Merchant: ${merchant.businessName}`
-    );
+    console.log(  `⭐ Golden case: Amit Singh — ₹4,999` );
 
-    console.log(
-      `👥 Customers: ${insertedCustomers.length.toLocaleString()}`
-    );
-
-    console.log(
-      `❌ Failed payments: ${insertedPayments.length}`
-    );
-
-    console.log(
-      `🤖 Recovery cases: ${recoveryCases.length}`
-    );
-
-    console.log(
-      `💰 Revenue at risk: ₹${totalAtRisk.toLocaleString(
-        "en-IN"
-      )}`
-    );
-
-    console.log(
-      `⭐ Golden case: Amit Singh — ₹4,999`
-    );
-
-    console.log(
-      "══════════════════════════════════════\n"
-    );
+    console.log( "══════════════════════════════════════\n" );
 
     await mongoose.connection.close();
 
     process.exit(0);
   } catch (error) {
-    console.error(
-      "\n❌ Seed failed:"
-    );
+    console.error(  "\n❌ Seed failed:\n"  );
 
-    console.error(
-      error
-    );
+    console.error( error );
 
     await mongoose.connection.close();
 
