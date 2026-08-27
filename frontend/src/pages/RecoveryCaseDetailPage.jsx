@@ -641,7 +641,7 @@ const RecoveryCaseDetailPage =
 
           <div className="mt-6 overflow-x-auto">
 
-            <table className="w-full min-w-[850px] text-left text-sm">
+            <table className="w-full min-w-212.5 text-left text-sm">
 
               <thead>
                 <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
