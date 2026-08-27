@@ -1,0 +1,629 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  RefreshCw,
+  Search,
+  ArrowUpDown,
+  Play,
+  ChevronRight,
+  AlertTriangle,
+  CheckCircle2,
+  Clock3
+} from "lucide-react";
+
+import {
+  getRecoveryCases,
+  processRecoveryCase
+} from "../services/api.js";
+
+const formatINR = (value) => {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0
+  }).format(value || 0);
+};
+
+const formatRootCause = (value) => {
+  if (!value || value === "UNKNOWN") {
+    return "Awaiting analysis";
+  }
+
+  return value
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (char) =>
+      char.toUpperCase()
+    );
+};
+
+const formatAction = (value) => {
+  if (!value) {
+    return "Awaiting agent";
+  }
+
+  return value
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (char) =>
+      char.toUpperCase()
+    );
+};
+
+const getRiskLabel = (score) => {
+  if (score >= 80) return "Critical";
+  if (score >= 60) return "High";
+  if (score >= 40) return "Medium";
+  return "Low";
+};
+
+const StatusBadge = ({ status }) => {
+  const config = {
+    RECOVERED: {
+      icon: CheckCircle2,
+      className:
+        "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+    },
+
+    PENDING_ACTION: {
+      icon: Clock3,
+      className:
+        "bg-amber-500/10 text-amber-400 border-amber-500/20"
+    },
+
+    ACTION_SELECTED: {
+      icon: Clock3,
+      className:
+        "bg-blue-500/10 text-blue-400 border-blue-500/20"
+    },
+
+    DETECTED: {
+      icon: AlertTriangle,
+      className:
+        "bg-red-500/10 text-red-400 border-red-500/20"
+    },
+
+    ANALYZING: {
+      icon: RefreshCw,
+      className:
+        "bg-purple-500/10 text-purple-400 border-purple-500/20"
+    },
+
+    FAILED: {
+      icon: AlertTriangle,
+      className:
+        "bg-red-500/10 text-red-400 border-red-500/20"
+    },
+
+    ESCALATED: {
+      icon: AlertTriangle,
+      className:
+        "bg-orange-500/10 text-orange-400 border-orange-500/20"
+    },
+
+    STOPPED: {
+      icon: CheckCircle2,
+      className:
+        "bg-slate-500/10 text-slate-400 border-slate-500/20"
+    }
+  };
+
+  const selected =
+    config[status] || config.DETECTED;
+
+  const Icon = selected.icon;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${selected.className}`}
+    >
+      <Icon size={12} />
+      {status.replaceAll("_", " ")}
+    </span>
+  );
+};
+
+const CommandCenterPage = () => {
+  const [cases, setCases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState("ALL");
+
+  const [sortBy, setSortBy] =
+    useState("priority");
+
+  const [processingId, setProcessingId] =
+    useState(null);
+
+  const loadCases = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const response =
+        await getRecoveryCases(
+          "?limit=100"
+        );
+
+      setCases(
+        response.data?.cases || []
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCases();
+  }, []);
+
+  const filteredCases = useMemo(() => {
+    let result = [...cases];
+
+    if (statusFilter !== "ALL") {
+      result = result.filter(
+        (item) =>
+          item.status === statusFilter
+      );
+    }
+
+    if (search.trim()) {
+      const query =
+        search.toLowerCase().trim();
+
+      result = result.filter((item) => {
+        const customerName =
+          item.customerId?.name
+            ?.toLowerCase() || "";
+
+        const email =
+          item.customerId?.email
+            ?.toLowerCase() || "";
+
+        const rootCause =
+          item.rootCause
+            ?.toLowerCase() || "";
+
+        return (
+          customerName.includes(query) ||
+          email.includes(query) ||
+          rootCause.includes(query)
+        );
+      });
+    }
+
+    result.sort((a, b) => {
+      if (sortBy === "priority") {
+        return (
+          (b.priorityScore || 0) -
+          (a.priorityScore || 0)
+        );
+      }
+
+      if (sortBy === "risk") {
+        return (
+          (b.riskScore || 0) -
+          (a.riskScore || 0)
+        );
+      }
+
+      if (sortBy === "amount") {
+        return (
+          (b.amountAtRisk || 0) -
+          (a.amountAtRisk || 0)
+        );
+      }
+
+      return 0;
+    });
+
+    return result;
+  }, [
+    cases,
+    search,
+    statusFilter,
+    sortBy
+  ]);
+
+  const handleProcess = async (id) => {
+    try {
+      setProcessingId(id);
+
+      await processRecoveryCase(
+        id,
+        "SIMULATION"
+      );
+
+      await loadCases();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+
+      {/* Header */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+
+        <div>
+          <p className="text-sm text-slate-500">
+            Revenue Recovery
+          </p>
+
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+            Recovery Command Center
+          </h1>
+
+          <p className="mt-2 text-slate-400">
+            Prioritize and manage revenue recovery opportunities.
+          </p>
+        </div>
+
+        <button
+          onClick={loadCases}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-200 transition hover:bg-slate-800"
+        >
+          <RefreshCw size={15} />
+          Refresh
+        </button>
+
+      </div>
+
+      {/* Controls */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+
+        <div className="flex flex-col gap-4 xl:flex-row">
+
+          {/* Search */}
+          <div className="relative flex-1">
+
+            <Search
+              size={17}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+            />
+
+            <input
+              value={search}
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
+              placeholder="Search customer, email, or root cause..."
+              className="w-full rounded-lg border border-slate-800 bg-slate-950 py-2.5 pl-10 pr-4 text-sm text-white outline-none placeholder:text-slate-600 focus:border-slate-600"
+            />
+
+          </div>
+
+          {/* Status */}
+          <select
+            value={statusFilter}
+            onChange={(e) =>
+              setStatusFilter(
+                e.target.value
+              )
+            }
+            className="rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-slate-300 outline-none"
+          >
+            <option value="ALL">
+              All statuses
+            </option>
+
+            <option value="DETECTED">
+              Detected
+            </option>
+
+            <option value="ANALYZING">
+              Analyzing
+            </option>
+
+            <option value="ACTION_SELECTED">
+              Action Selected
+            </option>
+
+            <option value="PENDING_ACTION">
+              Pending Action
+            </option>
+
+            <option value="RECOVERED">
+              Recovered
+            </option>
+
+            <option value="FAILED">
+              Failed
+            </option>
+
+            <option value="ESCALATED">
+              Escalated
+            </option>
+          </select>
+
+          {/* Sort */}
+          <div className="flex items-center gap-2">
+
+            <ArrowUpDown
+              size={15}
+              className="text-slate-500"
+            />
+
+            <select
+              value={sortBy}
+              onChange={(e) =>
+                setSortBy(e.target.value)
+              }
+              className="rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-slate-300 outline-none"
+            >
+              <option value="priority">
+                Priority
+              </option>
+
+              <option value="risk">
+                Risk
+              </option>
+
+              <option value="amount">
+                Amount
+              </option>
+            </select>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+
+        <div className="border-b border-slate-800 px-6 py-5">
+          <div className="flex items-center justify-between">
+
+            <div>
+              <h2 className="font-semibold">
+                Recovery Opportunities
+              </h2>
+
+              <p className="mt-1 text-xs text-slate-500">
+                {filteredCases.length} cases shown
+              </p>
+            </div>
+
+            <div className="text-right">
+              <p className="text-xs text-slate-500">
+                Ordered by
+              </p>
+
+              <p className="text-sm font-medium">
+                {sortBy === "priority"
+                  ? "Recovery Priority"
+                  : sortBy === "risk"
+                    ? "Risk Score"
+                    : "Amount at Risk"}
+              </p>
+            </div>
+
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex min-h-96 items-center justify-center text-slate-500">
+            Loading recovery cases...
+          </div>
+        ) : filteredCases.length === 0 ? (
+          <div className="flex min-h-96 items-center justify-center text-slate-500">
+            No recovery cases found.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+
+            <table className="w-full min-w-275 text-left">
+
+              <thead>
+                <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
+
+                  <th className="px-6 py-4 font-medium">
+                    Customer
+                  </th>
+
+                  <th className="px-4 py-4 font-medium">
+                    Amount at Risk
+                  </th>
+
+                  <th className="px-4 py-4 font-medium">
+                    Risk
+                  </th>
+
+                  <th className="px-4 py-4 font-medium">
+                    Recovery
+                  </th>
+
+                  <th className="px-4 py-4 font-medium">
+                    Root Cause
+                  </th>
+
+                  <th className="px-4 py-4 font-medium">
+                    Action
+                  </th>
+
+                  <th className="px-4 py-4 font-medium">
+                    Status
+                  </th>
+
+                  <th className="px-6 py-4 text-right font-medium">
+                    Action
+                  </th>
+
+                </tr>
+              </thead>
+
+              <tbody>
+
+                {filteredCases.map((item) => (
+                  <tr
+                    key={item._id}
+                    className="border-b border-slate-800/70 transition hover:bg-slate-800/30"
+                  >
+
+                    {/* Customer */}
+                    <td className="px-6 py-5">
+
+                      <div>
+                        <p className="font-medium text-white">
+                          {item.customerId?.name ||
+                            "Unknown Customer"}
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-500">
+                          {item.customerId?.email ||
+                            "No email"}
+                        </p>
+                      </div>
+
+                    </td>
+
+                    {/* Amount */}
+                    <td className="px-4 py-5">
+
+                      <p className="font-medium">
+                        {formatINR(
+                          item.amountAtRisk
+                        )}
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        Expected{" "}
+                        {formatINR(
+                          item.expectedRecovery
+                        )}
+                      </p>
+
+                    </td>
+
+                    {/* Risk */}
+                    <td className="px-4 py-5">
+
+                      <p className="font-medium">
+                        {item.riskScore}/100
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        {getRiskLabel(
+                          item.riskScore
+                        )}
+                      </p>
+
+                    </td>
+
+                    {/* Recovery */}
+                    <td className="px-4 py-5">
+
+                      <p className="font-medium">
+                        {item.recoveryProbability}%
+                      </p>
+
+                    </td>
+
+                    {/* Root cause */}
+                    <td className="px-4 py-5">
+
+                      <p className="text-sm text-slate-300">
+                        {formatRootCause(
+                          item.rootCause
+                        )}
+                      </p>
+
+                    </td>
+
+                    {/* Action */}
+                    <td className="px-4 py-5">
+
+                      <p className="text-sm text-slate-300">
+                        {formatAction(
+                          item.recommendedAction
+                        )}
+                      </p>
+
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-4 py-5">
+                      <StatusBadge
+                        status={item.status}
+                      />
+                    </td>
+
+                    {/* Controls */}
+                    <td className="px-6 py-5">
+
+                      <div className="flex justify-end gap-2">
+
+                        {(item.status ===
+                          "DETECTED" ||
+                          item.status ===
+                            "ACTION_SELECTED") && (
+                          <button
+                            onClick={() =>
+                              handleProcess(
+                                item._id
+                              )
+                            }
+                            disabled={
+                              processingId ===
+                              item._id
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-medium text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Play size={12} />
+
+                            {processingId ===
+                            item._id
+                              ? "Running..."
+                              : "Run Agent"}
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() =>
+                            (window.location.href =
+                              `/recovery-cases/${item._id}`)
+                          }
+                          className="inline-flex items-center justify-center rounded-lg border border-slate-700 p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                        >
+                          <ChevronRight
+                            size={15}
+                          />
+                        </button>
+
+                      </div>
+
+                    </td>
+
+                  </tr>
+                ))}
+
+              </tbody>
+
+            </table>
+
+          </div>
+        )}
+
+      </div>
+
+    </div>
+  );
+};
+
+export default CommandCenterPage;

@@ -4,6 +4,8 @@ import AppLayout from "./layouts/AppLayout.jsx";
 
 import DashboardPage from "./pages/DashboardPage.jsx";
 
+import CommandCenterPage from "./pages/CommandCenterPage.jsx";
+
 const Placeholder = ({title}) => {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
@@ -51,7 +53,7 @@ const App = () => {
           <Route
             path="/command-center"
             element={
-              <Placeholder title="Recovery Command Center" />
+              <CommandCenterPage />
             }
           />
 
