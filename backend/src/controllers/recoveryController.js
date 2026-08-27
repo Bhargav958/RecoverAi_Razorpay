@@ -4,6 +4,8 @@ import processRecoveryCase from "../services/recoveryOrchestrator.js";
 
 import getMerchant from "../utils/getMerchant.js";
 
+import { getCaseAuditLogs } from "../services/auditService.js";
+
 export const analyzeCase = async (req, res) => {
   try {
     const { id } = req.params;
@@ -210,6 +212,32 @@ export const getRecoveryCases = async (req, res) => {
         success: false,
         message:
           error.message
+      });
+    }
+  };
+  
+
+export const getRecoveryCaseAudit =
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const logs =
+        await getCaseAuditLogs(id);
+
+      res.status(200).json({
+        success: true,
+        data: logs
+      });
+    } catch (error) {
+      console.error(
+        "Get recovery audit error:",
+        error.message
+      );
+
+      res.status(500).json({
+        success: false,
+        message: error.message
       });
     }
   };
