@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 
 import recoveryRoutes from "./routes/recoveryRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js"
 
 const app = express();
 
@@ -20,6 +21,12 @@ app.get("/api/health", (req, res) => {
     message: "RecoverAI backend is running"
   });
 });
+
+app.use(
+  "/api/dashboard",
+  dashboardRoutes
+);
+
 
 app.use(
   "/api/recovery",
