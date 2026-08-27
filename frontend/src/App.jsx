@@ -10,6 +10,9 @@ import RecoveryCaseDetailPage from "./pages/RecoveryCaseDetailPage.jsx";
 
 import SimulationPage from "./pages/SimulationPage.jsx";
 
+import AgentActivityPage from "./pages/AgentActivityPage.jsx";
+
+
 const Placeholder = ({title}) => {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
@@ -91,7 +94,7 @@ const App = () => {
           <Route
             path="/agent-activity"
             element={
-              <Placeholder title="Agent Activity" />
+              <AgentActivityPage />
             }
           />
 

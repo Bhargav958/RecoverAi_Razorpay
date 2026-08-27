@@ -90,6 +90,13 @@ const runSimulation = async ({
     });
   };
 
+const getAgentActivity = async (
+    limit = 30
+  ) => {
+    return request(
+      `/agent/activity?limit=${limit}`
+    );
+  };
 
 export {
   getDashboardSummary,
@@ -98,5 +105,6 @@ export {
   processRecoveryCase,
   runRecoveryWorker,
   getRecoveryCaseAudit,
-  runSimulation
+  runSimulation,
+  getAgentActivity
 };

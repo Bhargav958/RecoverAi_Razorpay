@@ -6,6 +6,7 @@ import dashboardRoutes from "./routes/dashboardRoutes.js"
 import workerRoutes from "./routes/workerRoutes.js"
 
 import simulationRoutes from "./routes/simulationRoutes.js";
+import agentRoutes from "./routes/agentRoutes.js";
 
 const app = express();
 
@@ -44,6 +45,11 @@ app.use(
 app.use(
   "/api/simulation",
   simulationRoutes
+);
+
+app.use(
+  "/api/agent",
+  agentRoutes
 );
 
 export default app;

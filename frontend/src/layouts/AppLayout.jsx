@@ -9,7 +9,8 @@ import {
   SlidersHorizontal,
   FileClock,
   Settings,
-  Zap
+  Zap,
+  FlaskConical
 } from "lucide-react";
 
 import {
@@ -32,6 +33,11 @@ const navigation = [
     label: "Command Center",
     path: "/command-center",
     icon: ListChecks
+  },
+  {
+    label: "Simulation Lab",
+    path: "/simulation",
+    icon: FlaskConical
   },
   {
     label: "Customers",
