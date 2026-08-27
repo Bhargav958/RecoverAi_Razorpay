@@ -6,6 +6,8 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 
 import CommandCenterPage from "./pages/CommandCenterPage.jsx";
 
+import RecoveryCaseDetailPage from "./pages/RecoveryCaseDetailPage.jsx";
+
 const Placeholder = ({title}) => {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
@@ -35,6 +37,12 @@ const App = () => {
         <Route
           element={<AppLayout />}
         >
+          <Route
+            path="/recovery-cases/:id"
+            element={
+              <RecoveryCaseDetailPage />
+            }
+          />
 
           <Route
             path="/"

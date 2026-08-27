@@ -69,10 +69,18 @@ const runRecoveryWorker = async ({ ignoreSchedule = false, mode = "SIMULATION", 
     );
   };
 
+  const getRecoveryCaseAudit =
+  async (id) => {
+    return request(
+      `/recovery/cases/${id}/audit`
+    );
+  };
+
 export {
   getDashboardSummary,
   getRecoveryCases,
   getRecoveryCase,
   processRecoveryCase,
-  runRecoveryWorker
+  runRecoveryWorker,
+  getRecoveryCaseAudit
 };
