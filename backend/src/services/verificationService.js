@@ -406,6 +406,10 @@ const verifyRecovery = async ({
     recoveryCase.status =
       "RECOVERED";
 
+    recoveryCase.nextActionAt = null;
+
+    recoveryCase.currentAction = null;
+
     recoveryCase.stoppedReason =
       "Payment successfully recovered.";
 
@@ -469,6 +473,9 @@ const verifyRecovery = async ({
     await customer.save();
 
     await action.save();
+
+    // recoveryCase.nextActionAt = null;
+    // recoveryCase.currentAction = null;
 
     await recoveryCase.save();
 

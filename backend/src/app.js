@@ -3,6 +3,7 @@ import cors from "cors";
 
 import recoveryRoutes from "./routes/recoveryRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js"
+import workerRoutes from "./routes/workerRoutes.js"
 
 const app = express();
 
@@ -26,6 +27,11 @@ app.use(
   "/api/dashboard",
   dashboardRoutes
 );
+
+app.use(
+  "/api/recovery/worker",
+  workerRoutes
+)
 
 
 app.use(

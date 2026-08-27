@@ -419,6 +419,18 @@ const seedDatabase = async () => {
     const customerUpdates = [];
 
     for (const payment of insertedPayments) {
+      /*
+      * Amit already has his current failed payment represented
+      * in his initial statistics, so do not increment him again.
+      */
+
+      if (
+        payment.customerId.toString() ===
+        amit._id.toString()
+      ) {
+        continue;
+      }
+
       customerUpdates.push({
         updateOne: {
           filter: {
@@ -433,6 +445,12 @@ const seedDatabase = async () => {
           }
         }
       });
+    }
+
+    if (customerUpdates.length > 0) {
+      await Customer.bulkWrite(
+        customerUpdates
+      );
     }
 
     /*
@@ -598,31 +616,31 @@ const seedDatabase = async () => {
         }
       ];
 
-      if (i === 0) {
-        timeline.push(
-          {
-            event: "ROOT_CAUSE_IDENTIFIED",
-            description:
-              "Temporary bank failure detected with 91% confidence",
+      // if (i === 0) {
+      //   timeline.push(
+      //     {
+      //       event: "ROOT_CAUSE_IDENTIFIED",
+      //       description:
+      //         "Temporary bank failure detected with 91% confidence",
 
-            timestamp: new Date(
-              payment.createdAt.getTime() +
-                2000
-            )
-          },
+      //       timestamp: new Date(
+      //         payment.createdAt.getTime() +
+      //           2000
+      //       )
+      //     },
 
-          {
-            event: "RECOVERY_DECISION",
-            description:
-              "Retry after 6 hours selected by AI",
+      //     {
+      //       event: "RECOVERY_DECISION",
+      //       description:
+      //         "Retry after 6 hours selected by AI",
 
-            timestamp: new Date(
-              payment.createdAt.getTime() +
-                3000
-            )
-          }
-        );
-      }
+      //       timestamp: new Date(
+      //         payment.createdAt.getTime() +
+      //           3000
+      //       )
+      //     }
+      //   );
+      // }
 
       const recoveryCase = {
         merchantId: merchant._id,
