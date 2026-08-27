@@ -76,11 +76,27 @@ const runRecoveryWorker = async ({ ignoreSchedule = false, mode = "SIMULATION", 
     );
   };
 
+
+const runSimulation = async ({
+    batchSize = 10,
+    mode = "SIMULATION"
+  } = {}) => {
+    return request("/simulation/run", {
+      method: "POST",
+      body: JSON.stringify({
+        batchSize,
+        mode
+      })
+    });
+  };
+
+
 export {
   getDashboardSummary,
   getRecoveryCases,
   getRecoveryCase,
   processRecoveryCase,
   runRecoveryWorker,
-  getRecoveryCaseAudit
+  getRecoveryCaseAudit,
+  runSimulation
 };

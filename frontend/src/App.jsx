@@ -8,6 +8,8 @@ import CommandCenterPage from "./pages/CommandCenterPage.jsx";
 
 import RecoveryCaseDetailPage from "./pages/RecoveryCaseDetailPage.jsx";
 
+import SimulationPage from "./pages/SimulationPage.jsx";
+
 const Placeholder = ({title}) => {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
@@ -41,6 +43,13 @@ const App = () => {
             path="/recovery-cases/:id"
             element={
               <RecoveryCaseDetailPage />
+            }
+          />
+
+          <Route
+            path="/simulation"
+            element={
+              <SimulationPage />
             }
           />
 
