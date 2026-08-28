@@ -15,13 +15,16 @@ import {
 
 import {
   getRecoveryCase,
-  getRecoveryCaseAudit
+  getRecoveryCaseAudit,
+  approveEscalatedCase,
+  rejectEscalatedCase
 } from "../services/api.js";
 
 import {
   useNavigate,
   useParams
 } from "react-router-dom";
+
 
 const formatINR = (value) => {
   return new Intl.NumberFormat(
@@ -132,6 +135,7 @@ const TimelineIcon = ({ event }) => {
   );
 };
 
+
 const RecoveryCaseDetailPage =
   () => {
     const { id } =
@@ -151,6 +155,37 @@ const RecoveryCaseDetailPage =
 
     const [error, setError] =
       useState("");
+
+    const [reviewLoading, setReviewLoading] =
+      useState(false);
+
+    const handleApprove = async () => {
+      try {
+        setReviewLoading(true);
+
+        await approveEscalatedCase(id);
+
+        window.location.reload();
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setReviewLoading(false);
+      }
+    };
+
+    const handleReject = async () => {
+      try {
+        setReviewLoading(true);
+
+        await rejectEscalatedCase(id);
+
+        window.location.reload();
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setReviewLoading(false);
+      }
+    };
 
     useEffect(() => {
       const loadCase = async () => {
@@ -283,6 +318,67 @@ const RecoveryCaseDetailPage =
           </div>
 
         </div>
+
+        {recoveryCase.status === "ESCALATED" && (
+          <div className="rounded-2xl border border-orange-500/20 bg-orange-500/5 p-6">
+
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+
+              <div className="flex gap-4">
+
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-orange-500/20 bg-orange-500/10 text-orange-400">
+                  <AlertTriangle size={18} />
+                </div>
+
+                <div>
+
+                  <h2 className="font-semibold text-orange-300">
+                    Human Review Required
+                  </h2>
+
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                    RecoverAI has paused autonomous execution because
+                    this case requires merchant approval.
+                  </p>
+
+                  {recoveryCase.stoppedReason && (
+                    <p className="mt-3 text-xs text-slate-500">
+                      {recoveryCase.stoppedReason}
+                    </p>
+                  )}
+
+                </div>
+
+              </div>
+
+              <div className="flex gap-2">
+
+                <button
+                  onClick={handleApprove}
+                  disabled={reviewLoading}
+                  className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-slate-950 hover:bg-slate-200 disabled:opacity-50"
+                >
+                  <CheckCircle2 size={15} />
+
+                  Approve Recovery
+                </button>
+
+                <button
+                  onClick={handleReject}
+                  disabled={reviewLoading}
+                  className="inline-flex items-center gap-2 rounded-lg border border-red-900/50 bg-red-950/20 px-4 py-2.5 text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                >
+                  <AlertTriangle size={15} />
+
+                  Stop
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
 
         {/* KPI */}
         <div className="grid gap-4 md:grid-cols-4">

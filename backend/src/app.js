@@ -17,6 +17,8 @@ import razorpayWebhookRoutes from "./routes/razorpayWebhookRoutes.js";
 
 import webhookRoutes from "./routes/webhookRoutes.js";
 
+import escalationRoutes from "./routes/escalationRoutes.js";
+
 const app =
   express();
 
@@ -99,6 +101,11 @@ app.use(
 app.use(
   "/api/agent",
   agentRoutes
+);
+
+app.use(
+  "/api/escalations",
+  escalationRoutes
 );
 
 export default app;
