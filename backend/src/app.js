@@ -8,6 +8,8 @@ import workerRoutes from "./routes/workerRoutes.js"
 import simulationRoutes from "./routes/simulationRoutes.js";
 import agentRoutes from "./routes/agentRoutes.js";
 
+import policyRoutes from "./routes/policyRoutes.js";
+
 const app = express();
 
 app.use(
@@ -50,6 +52,11 @@ app.use(
 app.use(
   "/api/agent",
   agentRoutes
+);
+
+app.use(
+  "/api/policies",
+  policyRoutes
 );
 
 export default app;
