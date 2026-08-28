@@ -2,37 +2,71 @@ import express from "express";
 import cors from "cors";
 
 import recoveryRoutes from "./routes/recoveryRoutes.js";
-import dashboardRoutes from "./routes/dashboardRoutes.js"
-import workerRoutes from "./routes/workerRoutes.js"
+
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+ 
+import workerRoutes from "./routes/workerRoutes.js";
 
 import simulationRoutes from "./routes/simulationRoutes.js";
-import agentRoutes from "./routes/agentRoutes.js";
 
 import policyRoutes from "./routes/policyRoutes.js";
 
-const app = express();
+import agentRoutes from "./routes/agentRoutes.js";
+
+import razorpayWebhookRoutes from "./routes/razorpayWebhookRoutes.js";
+
+const app =
+  express();
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin:
+      "http://localhost:5173",
+
     credentials: true
   })
 );
 
-app.use(express.json());
+/*
+|--------------------------------------------------------------------------
+| Razorpay webhook
+|--------------------------------------------------------------------------
+|
+| Must come BEFORE express.json()
+|
+|--------------------------------------------------------------------------
+*/
 
-app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    message: "RecoverAI backend is running"
-  });
-});
+app.use(
+  "/api/webhooks/razorpay",
+  razorpayWebhookRoutes
+);
+
+/*
+|--------------------------------------------------------------------------
+| Normal JSON API
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  express.json()
+);
+
+app.get(
+  "/api/health",
+  (req, res) => {
+    res.json({
+      success: true,
+      message:
+        "RecoverAI backend is running"
+    });
+  }
+);
 
 app.use(
   "/api/dashboard",
   dashboardRoutes
 );
-
 
 app.use(
   "/api/recovery",
@@ -50,13 +84,13 @@ app.use(
 );
 
 app.use(
-  "/api/agent",
-  agentRoutes
+  "/api/policies",
+  policyRoutes
 );
 
 app.use(
-  "/api/policies",
-  policyRoutes
+  "/api/agent",
+  agentRoutes
 );
 
 export default app;
