@@ -15,6 +15,8 @@ import agentRoutes from "./routes/agentRoutes.js";
 
 import razorpayWebhookRoutes from "./routes/razorpayWebhookRoutes.js";
 
+import webhookRoutes from "./routes/webhookRoutes.js";
+
 const app =
   express();
 
@@ -40,6 +42,12 @@ app.use(
 app.use(
   "/api/webhooks/razorpay",
   razorpayWebhookRoutes
+);
+
+
+app.use(
+  "/api/webhooks",
+  webhookRoutes
 );
 
 /*

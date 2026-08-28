@@ -90,6 +90,9 @@ const testWebhook = async () => {
 
     const eventId =
         "evt_test_idempotency_001";
+      
+    const paymentId =
+        "pay_test_idempotency_001";
 
     const result =
       await processRazorpayWebhook({
