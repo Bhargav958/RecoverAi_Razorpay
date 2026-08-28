@@ -171,7 +171,7 @@ export const getRecoveryCases = async (req, res) => {
           )
           .populate(
             "paymentId",
-            "amount status method failureCode failureReason"
+            "amount status method failureCode failureReason isSimulation razorpayPaymentId razorpayOrderId"
           )
           .sort({
             priorityScore: -1,

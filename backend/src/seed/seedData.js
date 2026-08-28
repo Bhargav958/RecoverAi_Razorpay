@@ -10,6 +10,7 @@ import RecoveryCase from "../models/RecoveryCase.js";
 import RecoveryAction from "../models/RecoveryAction.js";
 import Policy from "../models/Policy.js";
 import AuditLog from "../models/AuditLog.js";
+import WebhookEvent from "../models/WebhookEvent.js";
 
 import { calculateRisk } from "../services/riskEngine.js";
 
@@ -239,6 +240,11 @@ const seedDatabase = async () => {
 
     await connectDB();
 
+    console.log(
+      "🧹 Clearing previous webhook events..."
+    );
+
+    await WebhookEvent.deleteMany({});
     /*
     |--------------------------------------------------------------------------
     | Remove previous demo data
@@ -259,6 +265,11 @@ const seedDatabase = async () => {
 
       await AuditLog.deleteMany({
         merchantId: existingMerchant._id
+      });
+
+      await WebhookEvent.deleteMany({
+        merchantId:
+          existingMerchant._id
       });
 
       /*

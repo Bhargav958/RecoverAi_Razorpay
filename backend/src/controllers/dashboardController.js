@@ -31,7 +31,7 @@ const getDashboardSummary = async (req,res) => {
         )
         .populate(
           "paymentId",
-          "amount status method failureReason"
+          "amount status method failureCode failureReason isSimulation razorpayPaymentId razorpayOrderId"
         )
         .sort({
           updatedAt: -1
