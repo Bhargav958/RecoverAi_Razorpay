@@ -98,6 +98,10 @@ const getAgentActivity = async (
     );
   };
 
+const getMerchantPolicy = async () => {
+    return request("/policies");
+  };
+
 export {
   getDashboardSummary,
   getRecoveryCases,
@@ -106,5 +110,6 @@ export {
   runRecoveryWorker,
   getRecoveryCaseAudit,
   runSimulation,
-  getAgentActivity
+  getAgentActivity,
+  getMerchantPolicy
 };

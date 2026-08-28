@@ -12,6 +12,9 @@ import SimulationPage from "./pages/SimulationPage.jsx";
 
 import AgentActivityPage from "./pages/AgentActivityPage.jsx";
 
+import AnalyticsPage from "./pages/AnalyticsPage.jsx";
+
+import PoliciesPage from "./pages/PoliciesPage.jsx";
 
 const Placeholder = ({title}) => {
   return (
@@ -101,14 +104,14 @@ const App = () => {
           <Route
             path="/analytics"
             element={
-              <Placeholder title="Analytics" />
+              <AnalyticsPage />
             }
           />
 
           <Route
             path="/policies"
             element={
-              <Placeholder title="Policies" />
+              <PoliciesPage />
             }
           />
 
