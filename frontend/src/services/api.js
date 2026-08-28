@@ -102,6 +102,28 @@ const getMerchantPolicy = async () => {
     return request("/policies");
   };
 
+const getWebhookStatus = async () => {
+    return request("/webhooks/status");
+  };
+
+const approveEscalatedCase = async (id) => {
+    return request(
+      `/escalations/${id}/approve`,
+      {
+        method: "POST"
+      }
+    );
+  };
+
+const rejectEscalatedCase = async (id) => {
+    return request(
+      `/escalations/${id}/reject`,
+      {
+        method: "POST"
+      }
+    );
+  };
+
 export {
   getDashboardSummary,
   getRecoveryCases,
@@ -111,5 +133,8 @@ export {
   getRecoveryCaseAudit,
   runSimulation,
   getAgentActivity,
-  getMerchantPolicy
+  getMerchantPolicy,
+  getWebhookStatus,
+  approveEscalatedCase,
+  rejectEscalatedCase
 };

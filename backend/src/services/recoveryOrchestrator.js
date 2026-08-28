@@ -308,6 +308,33 @@ const processRecoveryCase = async ({
       diagnosis
     });
 
+  if (
+    !policyResult.allowed &&
+    policyResult.action ===
+      "HUMAN_ESCALATION"
+  ) {
+    recoveryCase.status =
+      "ESCALATED";
+
+    recoveryCase.currentAction =
+      "HUMAN_ESCALATION";
+
+    recoveryCase.nextActionAt =
+      null;
+
+    recoveryCase.timeline.push({
+      event:
+        "HUMAN_ESCALATION",
+
+      description:
+        policyResult.reason,
+
+      timestamp: new Date()
+    });
+
+    await recoveryCase.save();
+  }
+
   recoveryCase.timeline.push({
     event:
       policyResult.allowed

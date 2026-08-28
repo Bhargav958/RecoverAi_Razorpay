@@ -10,9 +10,13 @@ import {
   Clock3
 } from "lucide-react";
 
+
+
 import {
   getRecoveryCases,
-  processRecoveryCase
+  processRecoveryCase,
+  approveEscalatedCase,
+  rejectEscalatedCase
 } from "../services/api.js";
 
 const formatINR = (value) => {
@@ -137,6 +141,9 @@ const CommandCenterPage = () => {
   const [processingId, setProcessingId] =
     useState(null);
 
+  const [reviewingId, setReviewingId] =
+    useState(null);
+
   const loadCases = async () => {
     try {
       setLoading(true);
@@ -246,6 +253,37 @@ const CommandCenterPage = () => {
     }
   };
 
+
+  const handleApprove = async (id) => {
+    try {
+      setReviewingId(id);
+      setError("");
+
+      await approveEscalatedCase(id);
+
+      await loadCases();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  const handleReject = async (id) => {
+    try {
+      setReviewingId(id);
+      setError("");
+
+      await rejectEscalatedCase(id);
+
+      await loadCases();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
   return (
     <div className="space-y-8">
 
@@ -297,20 +335,6 @@ const CommandCenterPage = () => {
               placeholder="Search customer, email, or root cause..."
               className="w-full rounded-lg border border-slate-800 bg-slate-950 py-2.5 pl-10 pr-4 text-sm text-white outline-none placeholder:text-slate-600 focus:border-slate-600"
             />
-
-            <div className="mt-2 flex items-center gap-2">
-              <span
-                className={`rounded-md border px-2 py-1 text-[10px] uppercase tracking-wider ${
-                  item.paymentId?.isSimulation
-                    ? "border-slate-700 bg-slate-950 text-slate-500"
-                    : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                }`}
-              >
-                {item.paymentId?.isSimulation
-                  ? "Simulation"
-                  : "Razorpay"}
-              </span>
-            </div>
 
           </div>
 
@@ -583,29 +607,61 @@ const CommandCenterPage = () => {
 
                       <div className="flex justify-end gap-2">
 
-                        {(item.status ===
-                          "DETECTED" ||
-                          item.status ===
-                            "ACTION_SELECTED") && (
-                          <button
-                            onClick={() =>
-                              handleProcess(
-                                item._id
-                              )
-                            }
-                            disabled={
-                              processingId ===
-                              item._id
-                            }
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-medium text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <Play size={12} />
+                        {item.status === "ESCALATED" ? (
+                          <>
+                            <button
+                              onClick={() =>
+                                handleApprove(item._id)
+                              }
+                              disabled={
+                                reviewingId === item._id
+                              }
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-medium text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <CheckCircle2 size={12} />
 
-                            {processingId ===
-                            item._id
-                              ? "Running..."
-                              : "Run Agent"}
-                          </button>
+                              {reviewingId === item._id
+                                ? "Updating..."
+                                : "Approve"}
+                            </button>
+
+                            <button
+                              onClick={() =>
+                                handleReject(item._id)
+                              }
+                              disabled={
+                                reviewingId === item._id
+                              }
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-red-900/50 bg-red-950/20 px-3 py-2 text-xs text-red-300 transition hover:bg-red-950/40 disabled:opacity-50"
+                            >
+                              <AlertTriangle size={12} />
+                              Stop
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {(item.status === "DETECTED" ||
+                              item.status ===
+                                "ACTION_SELECTED") && (
+                              <button
+                                onClick={() =>
+                                  handleProcess(item._id)
+                                }
+                                disabled={
+                                  processingId ===
+                                  item._id
+                                }
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-medium text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <Play size={12} />
+
+                                {processingId ===
+                                item._id
+                                  ? "Running..."
+                                  : "Run Agent"}
+                              </button>
+                            )}
+                          </>
                         )}
 
                         <button
@@ -615,9 +671,7 @@ const CommandCenterPage = () => {
                           }
                           className="inline-flex items-center justify-center rounded-lg border border-slate-700 p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
                         >
-                          <ChevronRight
-                            size={15}
-                          />
+                          <ChevronRight size={15} />
                         </button>
 
                       </div>

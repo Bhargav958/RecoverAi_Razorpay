@@ -18,6 +18,8 @@ import PoliciesPage from "./pages/PoliciesPage.jsx";
 
 import AuditPage from "./pages/AuditPage.jsx";
 
+import SettingsPage from "./pages/SettingsPage.jsx";
+
 const Placeholder = ({title}) => {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
@@ -127,7 +129,7 @@ const App = () => {
           <Route
             path="/settings"
             element={
-              <Placeholder title="Settings" />
+              <SettingsPage />
             }
           />
 

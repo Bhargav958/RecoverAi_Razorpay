@@ -138,7 +138,7 @@ const AppLayout = () => {
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
 
               <span className="text-sm">
-                Simulation Mode
+                Razorpay Test + Simulation
               </span>
             </div>
           </div>
