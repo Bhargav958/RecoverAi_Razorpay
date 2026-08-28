@@ -16,6 +16,8 @@ import AnalyticsPage from "./pages/AnalyticsPage.jsx";
 
 import PoliciesPage from "./pages/PoliciesPage.jsx";
 
+import AuditPage from "./pages/AuditPage.jsx";
+
 const Placeholder = ({title}) => {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
@@ -118,7 +120,7 @@ const App = () => {
           <Route
             path="/audit"
             element={
-              <Placeholder title="Audit Trail" />
+              <AuditPage />
             }
           />
 
