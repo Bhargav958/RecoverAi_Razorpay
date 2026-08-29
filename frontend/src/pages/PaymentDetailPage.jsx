@@ -17,7 +17,7 @@ import {
   useParams
 } from "react-router-dom";
 
-import StatusBadge from "../componenets/StatusBadge.jsx";
+import StatusBadge from "../components/StatusBadge.jsx";
 
 const formatINR = (value) => {
   return new Intl.NumberFormat("en-IN", {

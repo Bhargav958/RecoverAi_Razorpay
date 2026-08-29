@@ -32,7 +32,7 @@ import {
 } from "react-router-dom";
 
 import StatusBadge
-  from "../componenets/StatusBadge.jsx";
+  from "../components/StatusBadge.jsx";
 
 /*
 |--------------------------------------------------------------------------

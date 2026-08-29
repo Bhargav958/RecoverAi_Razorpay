@@ -86,9 +86,19 @@ const getAnalytics = async (req, res) => {
                     branches: [
                       {
                         case: {
-                          $eq: [
-                            "$payment.failureCode",
-                            "BANK_TEMPORARY_FAILURE"
+                          $or: [
+                            {
+                              $eq: [
+                                "$payment.failureCode",
+                                "BANK_TEMPORARY_FAILURE"
+                              ]
+                            },
+                            {
+                              $eq: [
+                                "$payment.failureCode",
+                                "TEMPORARY_BANK_FAILURE"
+                              ]
+                            }
                           ]
                         },
                         then:
@@ -108,9 +118,25 @@ const getAnalytics = async (req, res) => {
 
                       {
                         case: {
-                          $eq: [
-                            "$payment.failureCode",
-                            "PAYMENT_METHOD_EXPIRED"
+                          $or: [
+                            {
+                              $eq: [
+                                "$payment.failureCode",
+                                "PAYMENT_METHOD_EXPIRED"
+                              ]
+                            },
+                            {
+                              $eq: [
+                                "$payment.failureCode",
+                                "CARD_EXPIRED"
+                              ]
+                            },
+                            {
+                              $eq: [
+                                "$payment.failureCode",
+                                "EXPIRED_PAYMENT_METHOD"
+                              ]
+                            }
                           ]
                         },
                         then:
@@ -119,9 +145,19 @@ const getAnalytics = async (req, res) => {
 
                       {
                         case: {
-                          $eq: [
-                            "$payment.failureCode",
-                            "AUTHENTICATION_FAILURE"
+                          $or: [
+                            {
+                              $eq: [
+                                "$payment.failureCode",
+                                "AUTHENTICATION_FAILURE"
+                              ]
+                            },
+                            {
+                              $eq: [
+                                "$payment.failureCode",
+                                "AUTHENTICATION_FAILED"
+                              ]
+                            }
                           ]
                         },
                         then:

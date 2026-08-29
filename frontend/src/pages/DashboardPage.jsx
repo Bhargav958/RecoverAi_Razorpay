@@ -27,7 +27,7 @@ import {
   getRecoveryCase
 } from "../services/api.js";
 
-import StatusBadge from "../componenets/StatusBadge.jsx";
+import StatusBadge from "../components/StatusBadge.jsx";
 
 const formatINR = (value) => {
   return new Intl.NumberFormat("en-IN", {
