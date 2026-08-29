@@ -19,6 +19,8 @@ import webhookRoutes from "./routes/webhookRoutes.js";
 
 import escalationRoutes from "./routes/escalationRoutes.js";
 
+import demoRoutes from "./routes/demoRoutes.js"
+
 const app =
   express();
 
@@ -106,6 +108,11 @@ app.use(
 app.use(
   "/api/escalations",
   escalationRoutes
+);
+
+app.use(
+  "/api/demo",
+  demoRoutes
 );
 
 export default app;

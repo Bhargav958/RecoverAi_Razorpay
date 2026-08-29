@@ -2,6 +2,7 @@ import crypto from "crypto";
 
 import Merchant from "../models/Merchant.js";
 import Payment from "../models/Payment.js";
+import Customer from "../models/Customer.js";
 import RecoveryCase from "../models/RecoveryCase.js";
 import WebhookEvent from "../models/WebhookEvent.js";
 import processRecoveryCase from "./recoveryOrchestrator.js";
@@ -178,13 +179,6 @@ const processPaymentFailed =
       const customerEmail =
         entity.email;
 
-      const Customer =
-        (
-          await import(
-            "../models/Customer.js"
-          )
-        ).default;
-
       const customer =
         customerEmail
           ? await Customer.findOne({
@@ -243,6 +237,21 @@ const processPaymentFailed =
           isSimulation:
             false
         });
+    }
+
+    /*
+     * Fetch customer for risk calculation
+     */
+
+    const customer =
+      await Customer.findById(
+        payment.customerId
+      );
+
+    if (!customer) {
+      throw new Error(
+        "Customer not found for payment"
+      );
     }
 
     /*
@@ -322,16 +331,16 @@ const processPaymentFailed =
                 new Date()
             },
 
-            {
-              event:
-                "RISK_ANALYSIS_COMPLETED",
+            // {
+            //   event:
+            //     "RISK_ANALYSIS_COMPLETED",
 
-              description:
-                `Initial risk score ${risk.riskScore}/100. Recovery probability ${risk.recoveryProbability}%.`,
+            //   description:
+            //     `Initial risk score ${risk.riskScore}/100. Recovery probability ${risk.recoveryProbability}%.`,
 
-              timestamp:
-                new Date()
-            },
+            //   timestamp:
+            //     new Date()
+            // },
 
             {
               event:

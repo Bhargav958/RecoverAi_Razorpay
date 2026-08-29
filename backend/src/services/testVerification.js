@@ -1,178 +1,148 @@
 import dotenv from "dotenv";
+import mongoose from "mongoose";
 
 import connectDB from "../config/db.js";
 
-import Customer from "../models/Customer.js";
-import RecoveryCase from "../models/RecoveryCase.js";
 import RecoveryAction from "../models/RecoveryAction.js";
-
 import verifyRecovery from "./verificationService.js";
 
 dotenv.config();
 
+const ACTION_ID =
+  process.argv[2];
+
 const testVerification = async () => {
   try {
+    if (!ACTION_ID) {
+      throw new Error(
+        "Please provide a RecoveryAction ID."
+      );
+    }
+
     await connectDB();
 
-    /*
-    |--------------------------------------------------------------------------
-    | Find Mohan
-    |--------------------------------------------------------------------------
-    */
+    console.log(
+      "\n===== RECOVERY VERIFICATION TEST =====\n"
+    );
 
-    const customer =
-      await Customer.findOne({
-        name: "Mohan Reddy"
-      });
+    console.log(
+      "Recovery Action ID:",
+      ACTION_ID
+    );
 
-    if (!customer) {
-      throw new Error(
-        "Mohan Reddy not found"
+    const action =
+      await RecoveryAction.findById(
+        ACTION_ID
       );
-    }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Find a case that has an EXECUTED action
-    |--------------------------------------------------------------------------
-    */
-
-    const recoveryCase =
-      await RecoveryCase.findOne({
-        customerId: customer._id,
-        status: "ACTION_EXECUTED"
-      });
-
-    if (!recoveryCase) {
+    if (!action) {
       throw new Error(
-        "No ACTION_EXECUTED recovery case found for Mohan Reddy"
-      );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Find the latest executed action
-    |--------------------------------------------------------------------------
-    */
-
-    const recoveryAction =
-      await RecoveryAction.findOne({
-        recoveryCaseId:
-          recoveryCase._id,
-
-        status: "EXECUTED"
-      }).sort({
-        createdAt: -1
-      });
-
-    if (!recoveryAction) {
-      throw new Error(
-        "No EXECUTED recovery action found"
+        "Recovery action not found."
       );
     }
 
     console.log(
-      "\n===== RECOVERAI VERIFICATION TEST =====\n"
+      "\nBefore verification:"
     );
 
     console.log(
-      "Customer:",
-      customer.name
-    );
+      JSON.stringify(
+        {
+          actionId:
+            action._id.toString(),
 
-    console.log(
-      "Amount at risk:",
-      `₹${recoveryCase.amountAtRisk}`
-    );
+          recoveryCaseId:
+            action.recoveryCaseId.toString(),
 
-    console.log(
-      "Recovery Action:",
-      recoveryAction.actionType
-    );
+          actionType:
+            action.actionType,
 
-    console.log(
-      "Before verification:"
-    );
+          status:
+            action.status,
 
-    console.log(
-      "Case status:",
-      recoveryCase.status
-    );
-
-    console.log(
-      "Action status:",
-      recoveryAction.status
-    );
-
-    console.log(
-      "Amount recovered:",
-      `₹${recoveryCase.amountRecovered}`
+          amountRecovered:
+            action.amountRecovered
+        },
+        null,
+        2
+      )
     );
 
     /*
     |--------------------------------------------------------------------------
-    | Verify successful recovery
+    | Run verification
     |--------------------------------------------------------------------------
     */
 
     const result =
       await verifyRecovery({
         recoveryActionId:
-          recoveryAction._id,
+          action._id,
 
-        simulateSuccess: true
+        simulateSuccess:
+          true
       });
 
     console.log(
-      "\nAfter verification:"
+      "\nVerification result:"
     );
 
     console.log(
-      "Recovered:",
-      result.recovered
+      JSON.stringify(
+        {
+          success:
+            result.success,
+
+          recovered:
+            result.recovered,
+
+          alreadyVerified:
+            result.alreadyVerified,
+
+          amountRecovered:
+            result.amountRecovered,
+
+          caseStatus:
+            result.recoveryCase?.status,
+
+          paymentStatus:
+            result.payment?.status
+        },
+        null,
+        2
+      )
     );
 
     console.log(
-      "Amount recovered:",
-      `₹${result.amountRecovered}`
+      "\n======================================\n"
     );
-
-    console.log(
-      "Case status:",
-      result.recoveryCase.status
-    );
-
-    console.log(
-      "Action status:",
-      result.action.status
-    );
-
-    console.log(
-      "Payment status:",
-      result.payment.status
-    );
-
-    console.log(
-      "Stopped reason:",
-      result.recoveryCase.stoppedReason
-    );
-
-    console.log(
-      "\n========================================\n"
-    );
-
-    process.exit(0);
 
   } catch (error) {
     console.error(
-      "\nVerification test failed:"
+      "\n❌ Verification test failed:\n"
     );
 
     console.error(
       error.message
     );
 
-    process.exit(1);
+    console.log(
+      "\n======================================\n"
+    );
+  } finally {
+    try {
+      if (
+        mongoose.connection.readyState !==
+        0
+      ) {
+        await mongoose.connection.close();
+      }
+    } catch (error) {
+      console.error(
+        "MongoDB cleanup warning:",
+        error.message
+      );
+    }
   }
 };
 
