@@ -2,11 +2,9 @@ import crypto from "crypto";
 
 import Merchant from "../models/Merchant.js";
 import Payment from "../models/Payment.js";
-import Customer from "../models/Customer.js";
 import RecoveryCase from "../models/RecoveryCase.js";
 import WebhookEvent from "../models/WebhookEvent.js";
-
-import { calculateRisk } from "./riskEngine.js";
+import processRecoveryCase from "./recoveryOrchestrator.js";
 
 import {
   createAuditLog
@@ -14,13 +12,10 @@ import {
 
 /*
 |--------------------------------------------------------------------------
-| Verify Razorpay Webhook Signature
+| Signature validation
 |--------------------------------------------------------------------------
 |
-| IMPORTANT:
-|
-| Razorpay requires the RAW webhook request body for signature
-| verification.
+| Razorpay signs the RAW webhook body using HMAC SHA256.
 |
 |--------------------------------------------------------------------------
 */
@@ -38,7 +33,7 @@ const verifyWebhookSignature = ({
 
   if (!signature) {
     throw new Error(
-      "Razorpay webhook signature is missing"
+      "X-Razorpay-Signature header is missing"
     );
   }
 
@@ -57,6 +52,10 @@ const verifyWebhookSignature = ({
       .update(rawBody)
       .digest("hex");
 
+  /*
+   * Timing-safe comparison prevents timing attacks.
+   */
+
   const expectedBuffer =
     Buffer.from(
       expectedSignature,
@@ -73,303 +72,264 @@ const verifyWebhookSignature = ({
     expectedBuffer.length !==
     receivedBuffer.length
   ) {
-    throw new Error(
-      "Invalid Razorpay webhook signature"
-    );
+    return false;
   }
 
-  if (
-    !crypto.timingSafeEqual(
-      expectedBuffer,
-      receivedBuffer
-    )
-  ) {
-    throw new Error(
-      "Invalid Razorpay webhook signature"
-    );
-  }
-
-  return true;
+  return crypto.timingSafeEqual(
+    expectedBuffer,
+    receivedBuffer
+  );
 };
 
 /*
 |--------------------------------------------------------------------------
-| Resolve merchant
+| Get demo merchant
 |--------------------------------------------------------------------------
 |
-| For the current solo/demo version, we use the configured Acme SaaS
-| merchant.
-|
-| Later, use Razorpay account_id -> Merchant.razorpayAccountId
-| for multi-merchant support.
+| We currently have one Acme SaaS merchant.
+| Later authentication / endpoint mapping can replace this.
 |
 |--------------------------------------------------------------------------
 */
 
-const resolveMerchant = async (
-  accountId
-) => {
-  /*
-   * Future multi-merchant lookup:
-   *
-   * Merchant.findOne({
-   *   razorpayAccountId: accountId
-   * })
-   */
+const getWebhookMerchant =
+  async () => {
+    const merchant =
+      await Merchant.findOne({
+        businessName: "Acme SaaS"
+      });
 
-  const merchant =
-    await Merchant.findOne({
-      businessName: "Acme SaaS"
-    });
-
-  if (!merchant) {
-    throw new Error(
-      "RecoverAI demo merchant not found"
-    );
-  }
-
-  return merchant;
-};
-
-/*
-|--------------------------------------------------------------------------
-| Handle payment.failed
-|--------------------------------------------------------------------------
-*/
-
-const handlePaymentFailed = async ({
-  merchant,
-  paymentEntity
-}) => {
-  const razorpayPaymentId =
-    paymentEntity.id;
-
-  /*
-   * Check whether we already have this payment.
-   */
-
-  let payment =
-    await Payment.findOne({
-      merchantId:
-        merchant._id,
-
-      razorpayPaymentId
-    });
-
-  /*
-   * Try to associate customer using email.
-   */
-
-  let customer = null;
-
-  if (payment?.customerId) {
-    customer =
-      await Customer.findById(
-        payment.customerId
+    if (!merchant) {
+      throw new Error(
+        "Acme SaaS merchant not found"
       );
-  }
+    }
 
-  if (!customer && paymentEntity.email) {
-    customer =
-      await Customer.findOne({
-        merchantId:
-          merchant._id,
+    return merchant;
+  };
 
-        email:
-          paymentEntity.email
-      });
-  }
+/*
+|--------------------------------------------------------------------------
+| Process payment.failed
+|--------------------------------------------------------------------------
+*/
 
-  /*
-   * For the hackathon demo, a known customer is required.
-   */
+const processPaymentFailed =
+  async ({
+    merchant,
+    payload
+  }) => {
+    const entity =
+      payload?.payload?.payment?.entity;
 
-  if (!customer) {
-    throw new Error(
-      `No RecoverAI customer found for Razorpay payment ${razorpayPaymentId}`
-    );
-  }
+    if (!entity) {
+      throw new Error(
+        "payment.failed payload does not contain payment entity"
+      );
+    }
 
-  /*
-   * Create or update Payment.
-   */
+    const razorpayPaymentId =
+      entity.id;
 
-  if (!payment) {
-    payment =
-      await Payment.create({
-        merchantId:
-          merchant._id,
+    if (!razorpayPaymentId) {
+      throw new Error(
+        "Razorpay payment ID is missing"
+      );
+    }
 
-        customerId:
-          customer._id,
+    /*
+     * Try to find an existing payment first.
+     */
 
-        razorpayPaymentId,
-
-        razorpayOrderId:
-          paymentEntity.order_id ||
-          null,
-
-        amount:
-          paymentEntity.amount,
-
-        currency:
-          paymentEntity.currency ||
-          "INR",
-
-        status:
-          "FAILED",
-
-        method:
-          paymentEntity.method ||
-          null,
-
-        failureCode:
-          paymentEntity.error_code ||
-          "UNKNOWN",
-
-        failureReason:
-          paymentEntity.error_description ||
-          paymentEntity.error_reason ||
-          "Razorpay payment failed",
-
-        isSimulation:
-          false
-      });
-  } else {
-    payment.status =
-      "FAILED";
-
-    payment.amount =
-      paymentEntity.amount;
-
-    payment.currency =
-      paymentEntity.currency ||
-      payment.currency;
-
-    payment.method =
-      paymentEntity.method ||
-      payment.method;
-
-    payment.failureCode =
-      paymentEntity.error_code ||
-      payment.failureCode ||
-      "UNKNOWN";
-
-    payment.failureReason =
-      paymentEntity.error_description ||
-      paymentEntity.error_reason ||
-      payment.failureReason;
-
-    await payment.save();
-  }
-
-  /*
-   * Prevent duplicate recovery cases for the same payment.
-   */
-
-  let recoveryCase =
-    await RecoveryCase.findOne({
-      paymentId:
-        payment._id
-    });
-
-  if (!recoveryCase) {
-    const risk =
-      calculateRisk({
-        payment,
-        customer
-      });
-
-    recoveryCase =
-      await RecoveryCase.create({
-        merchantId:
-          merchant._id,
-
-        customerId:
-          customer._id,
-
-        paymentId:
-          payment._id,
-
-        amountAtRisk:
-          payment.amount,
-
-        riskScore:
-          risk.riskScore,
-
-        recoveryProbability:
-          risk.recoveryProbability,
-
-        expectedRecovery:
-          risk.expectedRecovery,
-
-        priorityScore:
-          risk.priorityScore,
-
-        rootCause:
-          "UNKNOWN",
-
-        diagnosisConfidence:
-          0,
-
-        status:
-          "DETECTED",
-
-        attempts:
-          0,
-
-        amountRecovered:
-          0,
-
-        nextActionAt:
-          null,
-
-        aiReason:
-          undefined,
-
-        evidence:
-          [],
-
-        timeline: [
-          {
-            event:
-              "REVENUE_RISK_DETECTED",
-
-            description:
-              `₹${payment.amount.toLocaleString(
-                "en-IN"
-              )} Razorpay payment identified as at risk.`,
-
-            timestamp:
-              new Date()
-          },
-
-          {
-            event:
-              "RAZORPAY_PAYMENT_FAILED",
-
-            description:
-              `Razorpay payment ${razorpayPaymentId} failed.`,
-
-            timestamp:
-              new Date()
-          },
-
-          {
-            event:
-              "CASE_CREATED",
-
-            description:
-              "Recovery case created from Razorpay webhook.",
-
-            timestamp:
-              new Date()
-          }
-        ]
+    let payment =
+      await Payment.findOne({
+        razorpayPaymentId
       });
 
     /*
-     * Audit
+     * If payment already exists, update it.
+     */
+
+    if (payment) {
+      payment.status =
+        "FAILED";
+
+      payment.failureCode =
+        entity.error_code ||
+        entity.error_reason ||
+        "UNKNOWN";
+
+      payment.failureReason =
+        entity.error_description ||
+        entity.error_reason ||
+        "Payment failed";
+
+      await payment.save();
+    } else {
+      /*
+       * Create new payment record.
+       *
+       * We currently identify the demo customer from the
+       * Razorpay email when possible.
+       */
+
+      const customerEmail =
+        entity.email;
+
+      const Customer =
+        (
+          await import(
+            "../models/Customer.js"
+          )
+        ).default;
+
+      const customer =
+        customerEmail
+          ? await Customer.findOne({
+              merchantId:
+                merchant._id,
+
+              email:
+                customerEmail
+            })
+          : null;
+
+      if (!customer) {
+        throw new Error(
+          `No RecoverAI customer found for Razorpay email ${customerEmail || "unknown"}`
+        );
+      }
+
+      payment =
+        await Payment.create({
+          merchantId:
+            merchant._id,
+
+          customerId:
+            customer._id,
+
+          razorpayPaymentId,
+
+          razorpayOrderId:
+            entity.order_id ||
+            null,
+
+          amount:
+            Number(entity.amount || 0),
+
+          currency:
+            entity.currency ||
+            "INR",
+
+          status:
+            "FAILED",
+
+          method:
+            entity.method ||
+            null,
+
+          failureCode:
+            entity.error_code ||
+            entity.error_reason ||
+            "UNKNOWN",
+
+          failureReason:
+            entity.error_description ||
+            entity.error_reason ||
+            "Payment failed",
+
+          isSimulation:
+            false
+        });
+    }
+
+    /*
+     * Prevent duplicate RecoveryCase for the same payment.
+     */
+
+    let recoveryCase =
+      await RecoveryCase.findOne({
+        paymentId:
+          payment._id
+      });
+
+    if (!recoveryCase) {
+      recoveryCase =
+        await RecoveryCase.create({
+          merchantId:
+            merchant._id,
+
+          customerId:
+            payment.customerId,
+
+          paymentId:
+            payment._id,
+
+          amountAtRisk:
+            payment.amount,
+
+          rootCause:
+            "UNKNOWN",
+
+          diagnosisConfidence:
+            0,
+
+          status:
+            "DETECTED",
+
+          attempts:
+            0,
+
+          amountRecovered:
+            0,
+
+          nextActionAt:
+            null,
+
+          evidence:
+            [],
+
+          timeline: [
+            {
+              event:
+                "REVENUE_RISK_DETECTED",
+
+              description:
+                `₹${payment.amount.toLocaleString(
+                  "en-IN"
+                )} Razorpay payment identified as at risk.`,
+
+              timestamp:
+                new Date()
+            },
+
+            {
+              event:
+                "WEBHOOK_RECEIVED",
+
+              description:
+                "Razorpay payment.failed event received.",
+
+              timestamp:
+                new Date()
+            },
+
+            {
+              event:
+                "CASE_CREATED",
+
+              description:
+                "Recovery case created from Razorpay payment failure.",
+
+              timestamp:
+                new Date()
+            }
+          ]
+        });
+    }
+
+    /*
+     * Audit the incoming payment failure.
      */
 
     await createAuditLog({
@@ -386,7 +346,7 @@ const handlePaymentFailed = async ({
         "PAYMENT_FAILED",
 
       description:
-        `Razorpay payment ${razorpayPaymentId} failed and was added to RecoverAI.`,
+        `Razorpay reported payment ${razorpayPaymentId} as failed.`,
 
       metadata: {
         razorpayPaymentId,
@@ -405,172 +365,11 @@ const handlePaymentFailed = async ({
       }
     });
 
-    await createAuditLog({
-      merchantId:
-        merchant._id,
-
-      recoveryCaseId:
-        recoveryCase._id,
-
-      actor:
-        "SYSTEM",
-
-      eventType:
-        "RECOVERY_CASE_CREATED",
-
-      description:
-        "Recovery case automatically created from a real Razorpay payment failure.",
-
-      metadata: {
-        recoveryCaseId:
-          recoveryCase._id,
-
-        riskScore:
-          risk.riskScore,
-
-        recoveryProbability:
-          risk.recoveryProbability,
-
-        expectedRecovery:
-          risk.expectedRecovery
-      }
-    });
-  }
-
-  return {
-    payment,
-    recoveryCase,
-    customer
-  };
-};
-
-/*
-|--------------------------------------------------------------------------
-| Handle payment.captured
-|--------------------------------------------------------------------------
-*/
-
-const handlePaymentCaptured = async ({
-  merchant,
-  paymentEntity
-}) => {
-  const razorpayPaymentId =
-    paymentEntity.id;
-
-  const payment =
-    await Payment.findOne({
-      merchantId:
-        merchant._id,
-
-      razorpayPaymentId
-    });
-
-  /*
-   * If RecoverAI did not create this payment,
-   * simply acknowledge the event.
-   */
-
-  if (!payment) {
     return {
-      payment: null,
-      recoveryCase: null,
-      ignored: true
+      payment,
+      recoveryCase
     };
-  }
-
-  payment.status =
-    "CAPTURED";
-
-  payment.paidAt =
-    new Date();
-
-  await payment.save();
-
-  const recoveryCase =
-    await RecoveryCase.findOne({
-      paymentId:
-        payment._id
-    });
-
-  if (
-    recoveryCase &&
-    recoveryCase.status !==
-      "RECOVERED"
-  ) {
-    recoveryCase.amountRecovered =
-      recoveryCase.amountAtRisk;
-
-    recoveryCase.status =
-      "RECOVERED";
-
-    recoveryCase.currentAction =
-      null;
-
-    recoveryCase.nextActionAt =
-      null;
-
-    recoveryCase.stoppedReason =
-      "Payment captured by Razorpay.";
-
-    recoveryCase.timeline.push({
-      event:
-        "PAYMENT_RECOVERED",
-
-      description:
-        `₹${recoveryCase.amountAtRisk.toLocaleString(
-          "en-IN"
-        )} payment captured by Razorpay.`,
-
-      timestamp:
-        new Date()
-    });
-
-    recoveryCase.timeline.push({
-      event:
-        "RECOVERY_WORKFLOW_STOPPED",
-
-      description:
-        "Recovery workflow stopped because Razorpay confirmed payment capture.",
-
-      timestamp:
-        new Date()
-    });
-
-    await recoveryCase.save();
-
-    await createAuditLog({
-      merchantId:
-        merchant._id,
-
-      recoveryCaseId:
-        recoveryCase._id,
-
-      actor:
-        "RAZORPAY",
-
-      eventType:
-        "PAYMENT_RECOVERED",
-
-      description:
-        `Razorpay confirmed capture of ₹${recoveryCase.amountAtRisk.toLocaleString(
-          "en-IN"
-        )}.`,
-
-      metadata: {
-        razorpayPaymentId,
-
-        amountRecovered:
-          recoveryCase.amountRecovered
-      }
-    });
-  }
-
-  return {
-    payment,
-    recoveryCase,
-    ignored: false
   };
-};
 
 /*
 |--------------------------------------------------------------------------
@@ -578,142 +377,209 @@ const handlePaymentCaptured = async ({
 |--------------------------------------------------------------------------
 */
 
-const processRazorpayWebhook = async ({
-  rawBody,
-  signature,
-  eventId,
-  accountId,
-  secret
-}) => {
-  verifyWebhookSignature({
+const processRazorpayWebhook =
+  async ({
     rawBody,
     signature,
-    secret
-  });
+    eventId
+  }) => {
+    const secret =
+      process.env.RAZORPAY_WEBHOOK_SECRET;
 
-  /*
-   * Parse only AFTER signature verification.
-   */
+    /*
+     * Validate signature BEFORE parsing.
+     */
 
-  const payload =
-    JSON.parse(
-      rawBody
-    );
+    const valid =
+      verifyWebhookSignature({
+        rawBody,
+        signature,
+        secret
+      });
 
-  const merchant =
-    await resolveMerchant(
-      accountId
-    );
+    if (!valid) {
+      throw new Error(
+        "Invalid Razorpay webhook signature"
+      );
+    }
 
-  /*
-   * Idempotency.
-   */
+    if (!eventId) {
+      throw new Error(
+        "x-razorpay-event-id header is missing"
+      );
+    }
 
-  const existingEvent =
-    await WebhookEvent.findOne({
-      eventId
-    });
+    /*
+     * Parse only after signature validation.
+     */
 
-  if (existingEvent) {
-    return {
-      duplicate: true,
+    const payload =
+      JSON.parse(rawBody);
 
-      eventType:
-        existingEvent.eventType,
+    const merchant =
+      await getWebhookMerchant();
 
-      message:
-        "Webhook event already processed."
-    };
-  }
+    /*
+     * Idempotency check.
+     */
 
-  const event =
-    await WebhookEvent.create({
-      eventId,
+    const existing =
+      await WebhookEvent.findOne({
+        eventId
+      });
 
-      merchantId:
-        merchant._id,
+    if (existing) {
+      /*
+       * Do not process duplicate webhook.
+       */
 
-      eventType:
-        payload.event,
+      if (
+        existing.status !==
+        "DUPLICATE"
+      ) {
+        existing.status =
+          "DUPLICATE";
 
-      razorpayPaymentId:
-        payload.payload?.payment?.entity?.id ||
-        null,
+        await existing.save();
+      }
 
-      payload
-    });
+      return {
+        duplicate: true,
 
-  try {
-    let result = null;
+        eventId,
 
-    if (
-      payload.event ===
-      "payment.failed"
-    ) {
-      result =
-        await handlePaymentFailed({
-          merchant,
-
-          paymentEntity:
-            payload.payload
-              ?.payment
-              ?.entity
-        });
-    } else if (
-      payload.event ===
-      "payment.captured"
-    ) {
-      result =
-        await handlePaymentCaptured({
-          merchant,
-
-          paymentEntity:
-            payload.payload
-              ?.payment
-              ?.entity
-        });
-    } else {
-      result = {
-        ignored: true,
-
-        message:
-          `Event ${payload.event} is acknowledged but not processed by RecoverAI.`
+        eventType:
+          payload.event
       };
     }
 
-    event.processed =
-      true;
+    /*
+     * Store event before processing.
+     */
 
-    event.processedAt =
-      new Date();
+    const webhookEvent =
+      await WebhookEvent.create({
+        eventId,
 
-    if (
-      result?.payment
-        ?._id
-    ) {
-      event.paymentId =
-        result.payment._id;
+        eventType:
+          payload.event ||
+          "UNKNOWN",
+
+        merchantId:
+          merchant._id,
+
+        status:
+          "RECEIVED",
+
+        payload,
+
+        receivedAt:
+          new Date()
+      });
+
+    try {
+      let result = null;
+
+      switch (
+        payload.event
+      ) {
+        case "payment.failed": {
+          result =
+            await processPaymentFailed({
+              merchant,
+              payload
+            });
+
+          /*
+          * Start the recovery workflow after the failed
+          * payment has been safely recorded.
+          *
+          * We intentionally don't block webhook ingestion
+          * on the complete AI workflow.
+          */
+
+          processRecoveryCase({
+            recoveryCaseId:
+              result.recoveryCase._id,
+
+            mode: "SIMULATION"
+          })
+            .then(() => {
+              console.log(
+                `RecoverAI agent started for recovery case ${result.recoveryCase._id}`
+              );
+            })
+            .catch((error) => {
+              console.error(
+                `RecoverAI agent failed for recovery case ${result.recoveryCase._id}:`,
+                error.message
+              );
+            });
+
+          break;
+        }
+
+        case "payment.captured":
+          /*
+           * We will wire successful payment reconciliation
+           * into the verification layer next.
+           */
+
+          result = {
+            message:
+              "payment.captured received"
+          };
+
+          break;
+
+        case "payment.authorized":
+          result = {
+            message:
+              "payment.authorized received"
+          };
+
+          break;
+
+        default:
+          result = {
+            message:
+              `Webhook event ${payload.event || "UNKNOWN"} received but no processor is configured yet.`
+          };
+      }
+
+      webhookEvent.status =
+        "PROCESSED";
+
+      webhookEvent.processedAt =
+        new Date();
+
+      await webhookEvent.save();
+
+      return {
+        duplicate: false,
+
+        eventId,
+
+        eventType:
+          payload.event,
+
+        result
+      };
+    } catch (error) {
+      webhookEvent.status =
+        "FAILED";
+
+      webhookEvent.errorMessage =
+        error.message;
+
+      webhookEvent.processedAt =
+        new Date();
+
+      await webhookEvent.save();
+
+      throw error;
     }
-
-    await event.save();
-
-    return {
-      duplicate: false,
-
-      eventType:
-        payload.event,
-
-      result
-    };
-  } catch (error) {
-    event.error =
-      error.message;
-
-    await event.save();
-
-    throw error;
-  }
-};
+  };
 
 export {
   verifyWebhookSignature,
