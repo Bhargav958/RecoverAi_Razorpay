@@ -903,3 +903,77 @@ If a feature does not meaningfully improve this loop, it should not take priorit
 ## License
 
 This project is a hackathon project for the Razorpay AI Buildathon.
+
+---
+
+## Current Judge Demo Flow
+
+Start the backend:
+
+```bash
+npm --prefix backend run dev
+```
+
+Start the frontend:
+
+```bash
+npm --prefix frontend run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+Golden browser demo:
+
+1. Open Dashboard.
+2. Click **Simulate Payment Failure**.
+3. Wait for the live demo case panel to move through analysis.
+4. When the case reaches **Pending Action**, click **Run Recovery Worker**.
+5. Confirm the panel shows recovered revenue and open Case Detail.
+6. Review the full timeline and audit events.
+
+Human escalation demo:
+
+1. Open **Simulation Lab**.
+2. Run **High Value Escalation**.
+3. Open the resulting recovery case.
+4. Confirm the case is **Escalated** and autonomous execution is paused.
+5. Click **Approve Recovery** to schedule the bounded merchant-approved action, or **Stop** to reject it.
+6. After approval, run the worker against the case from the dashboard/worker flow or API.
+
+## Current API Surface
+
+```text
+GET  /api/health
+GET  /api/dashboard/summary
+GET  /api/dashboard/root-causes
+GET  /api/dashboard/recovery-performance
+GET  /api/analytics
+GET  /api/recovery/cases
+GET  /api/recovery/cases/:id
+GET  /api/recovery/cases/:id/audit
+POST /api/recovery/cases/:id/analyze
+POST /api/recovery/cases/:id/process
+POST /api/recovery/worker/run
+POST /api/simulation/run
+POST /api/simulation/scenario
+GET  /api/customers
+GET  /api/customers/:id
+GET  /api/payments
+GET  /api/payments/:id
+GET  /api/policies
+PUT  /api/policies
+GET  /api/audit
+GET  /api/agent/activity
+GET  /api/webhooks/status
+POST /api/demo/payment-failure
+POST /api/escalations/:id/approve
+POST /api/escalations/:id/reject
+```
+
+## Known Demo Limitations
+
+Live recovery execution remains intentionally unavailable. Simulation mode exercises the real RecoverAI workflow without sending real customer communications or initiating live Razorpay financial actions.
