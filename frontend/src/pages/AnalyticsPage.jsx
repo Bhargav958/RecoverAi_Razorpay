@@ -30,7 +30,7 @@ import {
 } from "recharts";
 
 import {
-  getDashboardSummary
+  getAnalytics
 } from "../services/api.js";
 
 const formatINR = (value) => {
@@ -68,7 +68,7 @@ const AnalyticsPage = () => {
       setError("");
 
       const response =
-        await getDashboardSummary();
+        await getAnalytics();
 
       setData(response.data);
     } catch (err) {
@@ -83,17 +83,18 @@ const AnalyticsPage = () => {
   }, []);
 
   const rootCauseData = useMemo(() => {
-    if (!data?.metrics?.rootCauseDistribution) {
+    if (!data?.rootCauses) {
       return [];
     }
 
-    return data.metrics.rootCauseDistribution.map(
+    return data.rootCauses.map(
       (item) => ({
         name: formatRootCause(
           item._id
         ),
         cases: item.cases,
-        revenue: item.revenueAtRisk
+        revenue: item.revenueAtRisk,
+        recovered: item.recoveredAmount
       })
     );
   }, [data]);
@@ -295,8 +296,8 @@ const AnalyticsPage = () => {
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-500">
-              Recovery Rate
+          <p className="text-sm text-slate-500">
+              Revenue Recovery Rate
             </p>
 
             <BarChart3
@@ -310,7 +311,50 @@ const AnalyticsPage = () => {
           </p>
 
           <p className="mt-2 text-xs text-slate-600">
-            Based on targeted revenue
+            Recovered revenue / targeted revenue
+          </p>
+        </div>
+
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <p className="text-sm text-slate-500">
+            Case Recovery Rate
+          </p>
+          <p className="mt-3 text-2xl font-semibold">
+            {metrics.caseRecoveryRate || 0}%
+          </p>
+          <p className="mt-2 text-xs text-slate-600">
+            Recovered cases / total cases
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <p className="text-sm text-slate-500">
+            Most Common Cause
+          </p>
+          <p className="mt-3 text-lg font-semibold">
+            {formatRootCause(
+              data.insights?.mostCommonRootCause?._id
+            )}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <p className="text-sm text-slate-500">
+            Best Performing Action
+          </p>
+          <p className="mt-3 text-lg font-semibold">
+            {formatRootCause(
+              data.insights?.bestAction?._id
+            )}
+          </p>
+          <p className="mt-2 text-xs text-emerald-400">
+            {formatINR(
+              data.insights?.bestAction?.recoveredAmount
+            )} recovered
           </p>
         </div>
 
@@ -540,6 +584,64 @@ const AnalyticsPage = () => {
             </BarChart>
           </ResponsiveContainer>
 
+        </div>
+
+      </div>
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+
+        <div>
+          <h2 className="text-lg font-semibold">
+            Intervention Performance
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Recovery action outcomes based on actual worker results.
+          </p>
+        </div>
+
+        <div className="mt-6 overflow-x-auto">
+          <table className="w-full min-w-175 text-left">
+            <thead>
+              <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
+                <th className="py-3 font-medium">Action</th>
+                <th className="py-3 font-medium">Attempts</th>
+                <th className="py-3 font-medium">Succeeded</th>
+                <th className="py-3 text-right font-medium">Recovered</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.actionPerformance || []).length === 0 ? (
+                <tr>
+                  <td
+                    colSpan="4"
+                    className="py-8 text-center text-sm text-slate-500"
+                  >
+                    No recovery actions have completed yet.
+                  </td>
+                </tr>
+              ) : (
+                data.actionPerformance.map((item) => (
+                  <tr
+                    key={item._id}
+                    className="border-b border-slate-800/70"
+                  >
+                    <td className="py-4 text-sm font-medium">
+                      {formatRootCause(item._id)}
+                    </td>
+                    <td className="py-4 text-sm text-slate-400">
+                      {item.attempts}
+                    </td>
+                    <td className="py-4 text-sm text-slate-400">
+                      {item.succeeded}
+                    </td>
+                    <td className="py-4 text-right text-sm font-medium text-emerald-400">
+                      {formatINR(item.recoveredAmount)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
 
       </div>

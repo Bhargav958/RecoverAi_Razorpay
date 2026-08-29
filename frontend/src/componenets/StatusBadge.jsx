@@ -14,6 +14,9 @@ const STATUS_STYLES = {
   ACTION_SCHEDULED:
     "border-amber-500/20 bg-amber-500/10 text-amber-400",
 
+  ACTION_SELECTED:
+    "border-amber-500/20 bg-amber-500/10 text-amber-400",
+
   ACTION_EXECUTED:
     "border-cyan-500/20 bg-cyan-500/10 text-cyan-400",
 
@@ -25,6 +28,33 @@ const STATUS_STYLES = {
 
   FAILED:
     "border-red-500/20 bg-red-500/10 text-red-400",
+
+  CAPTURED:
+    "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
+
+  SUCCEEDED:
+    "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
+
+  AUTHORIZED:
+    "border-blue-500/20 bg-blue-500/10 text-blue-400",
+
+  CREATED:
+    "border-slate-700 bg-slate-800 text-slate-300",
+
+  SCHEDULED:
+    "border-amber-500/20 bg-amber-500/10 text-amber-400",
+
+  PENDING:
+    "border-amber-500/20 bg-amber-500/10 text-amber-400",
+
+  EXECUTED:
+    "border-cyan-500/20 bg-cyan-500/10 text-cyan-400",
+
+  REJECTED:
+    "border-red-500/20 bg-red-500/10 text-red-400",
+
+  REFUNDED:
+    "border-slate-700 bg-slate-800 text-slate-400",
 
   STOPPED:
     "border-slate-700 bg-slate-800 text-slate-400"

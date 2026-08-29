@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import {
-  getAgentActivity
+  getAuditLogs
 } from "../services/api.js";
 
 const formatText = (value) => {
@@ -116,16 +116,35 @@ const AuditPage = () => {
   const [eventFilter, setEventFilter] =
     useState("ALL");
 
+  const [availableActors, setAvailableActors] =
+    useState([]);
+
+  const [availableEvents, setAvailableEvents] =
+    useState([]);
+
   const loadLogs = async () => {
     try {
       setLoading(true);
       setError("");
 
       const response =
-        await getAgentActivity(100);
+        await getAuditLogs({
+          limit: 100,
+          search,
+          actor: actorFilter,
+          eventType: eventFilter
+        });
 
       setLogs(
-        response.data?.activity || []
+        response.data?.logs || []
+      );
+
+      setAvailableActors(
+        response.data?.filters?.actors || []
+      );
+
+      setAvailableEvents(
+        response.data?.filters?.eventTypes || []
       );
     } catch (err) {
       setError(err.message);
@@ -136,35 +155,25 @@ const AuditPage = () => {
 
   useEffect(() => {
     loadLogs();
-  }, []);
+  }, [
+    search,
+    actorFilter,
+    eventFilter
+  ]);
 
   const actors = useMemo(() => {
     return [
       "ALL",
-      ...new Set(
-        logs
-          .map(
-            (item) =>
-              item.actor
-          )
-          .filter(Boolean)
-      )
+      ...availableActors
     ];
-  }, [logs]);
+  }, [availableActors]);
 
   const eventTypes = useMemo(() => {
     return [
       "ALL",
-      ...new Set(
-        logs
-          .map(
-            (item) =>
-              item.eventType
-          )
-          .filter(Boolean)
-      )
+      ...availableEvents
     ];
-  }, [logs]);
+  }, [availableEvents]);
 
   const filteredLogs = useMemo(() => {
     const query =

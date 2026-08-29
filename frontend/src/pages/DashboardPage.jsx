@@ -23,7 +23,8 @@ import {
   runSimulation,
   runRecoveryWorker,
   getAgentActivity,
-  simulatePaymentFailure
+  simulatePaymentFailure,
+  getRecoveryCase
 } from "../services/api.js";
 
 import StatusBadge from "../componenets/StatusBadge.jsx";
@@ -127,6 +128,9 @@ const DashboardPage = () => {
   const [workerResult, setWorkerResult] =
     useState(null);
 
+  const [demoCaseStatus, setDemoCaseStatus] =
+    useState(null);
+
   /*
   |--------------------------------------------------------------------------
   | Load dashboard + agent activity
@@ -185,6 +189,50 @@ const DashboardPage = () => {
     return () =>
       clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const caseId =
+      demoResult?.recoveryCaseId;
+
+    if (!caseId) {
+      setDemoCaseStatus(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const pollCase = async () => {
+      try {
+        const response =
+          await getRecoveryCase(
+            caseId
+          );
+
+        if (!cancelled) {
+          setDemoCaseStatus(
+            response.data
+          );
+        }
+      } catch {
+        // Ignore transient polling errors.
+      }
+    };
+
+    pollCase();
+
+    const interval =
+      setInterval(
+        pollCase,
+        3000
+      );
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [
+    demoResult?.recoveryCaseId
+  ]);
 
   /*
   |--------------------------------------------------------------------------
@@ -272,9 +320,16 @@ const DashboardPage = () => {
 
       const response =
         await runRecoveryWorker({
-          limit: 10,
-          mode: "SIMULATION",
-          ignoreSchedule: true
+          recoveryCaseId:
+            demoResult?.recoveryCaseId,
+
+          limit: 1,
+
+          mode:
+            "SIMULATION",
+
+          ignoreSchedule:
+            true
         });
 
       setWorkerResult(
@@ -428,7 +483,9 @@ const DashboardPage = () => {
             <button
               type="button"
               disabled={
-                workerLoading
+                workerLoading ||
+                !demoResult?.recoveryCaseId ||
+                demoCaseStatus?.status !== "PENDING_ACTION"
               }
               onClick={
                 handleRunWorker
@@ -458,31 +515,123 @@ const DashboardPage = () => {
         </div>
 
         {demoResult && (
-          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
 
-            <p className="text-sm font-medium text-emerald-400">
-              Payment failure received
-            </p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 
-            <p className="mt-1 text-xs text-slate-500">
-              Recovery case{" "}
-              <span className="font-mono text-slate-400">
-                {demoResult.recoveryCaseId}
-              </span>{" "}
-              created successfully.
-            </p>
+              <div>
 
-            <button
-              type="button"
-              onClick={() =>
-                window.location.href =
-                  `/recovery-cases/${demoResult.recoveryCaseId}`
-              }
-              className="mt-3 inline-flex items-center gap-2 text-xs text-slate-300 hover:text-white"
-            >
-              Review recovery case
-              <ChevronRight size={13} />
-            </button>
+                <p className="text-sm font-medium text-emerald-400">
+                  Demo recovery case created
+                </p>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Amit Singh · ₹4,999
+                </p>
+
+              </div>
+
+              {demoCaseStatus && (
+                <StatusBadge
+                  status={
+                    demoCaseStatus.status
+                  }
+                />
+              )}
+
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+
+              <div className="rounded-lg bg-slate-900 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-slate-600">
+                  Risk
+                </p>
+
+                <p className="mt-1 text-sm font-medium">
+                  {demoCaseStatus?.riskScore ?? "—"}/100
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-slate-900 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-slate-600">
+                  Recovery
+                </p>
+
+                <p className="mt-1 text-sm font-medium">
+                  {demoCaseStatus?.recoveryProbability ?? "—"}%
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-slate-900 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-slate-600">
+                  Root Cause
+                </p>
+
+                <p className="mt-1 truncate text-sm font-medium">
+                  {demoCaseStatus?.rootCause
+                    ? formatText(
+                        demoCaseStatus.rootCause
+                      )
+                    : "Analyzing..."}
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-slate-900 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-slate-600">
+                  Action
+                </p>
+
+                <p className="mt-1 truncate text-sm font-medium">
+                  {demoCaseStatus?.recommendedAction
+                    ? formatText(
+                        demoCaseStatus.recommendedAction
+                      )
+                    : "Pending"}
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-slate-900 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-slate-600">
+                  Recovered
+                </p>
+
+                <p className="mt-1 text-sm font-medium text-emerald-400">
+                  {formatINR(
+                    demoCaseStatus?.amountRecovered
+                  )}
+                </p>
+              </div>
+
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+
+              <button
+                type="button"
+                onClick={() =>
+                  window.location.href =
+                    `/recovery-cases/${demoResult.recoveryCaseId}`
+                }
+                className="inline-flex items-center gap-2 text-xs text-slate-300 hover:text-white"
+              >
+                Review recovery case
+                <ChevronRight size={13} />
+              </button>
+
+              {demoCaseStatus?.status ===
+                "RECOVERED" && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
+                  <CheckCircle2
+                    size={13}
+                  />
+                  {formatINR(
+                    demoCaseStatus.amountRecovered
+                  )} recovered
+                </span>
+              )}
+
+            </div>
 
           </div>
         )}
@@ -496,29 +645,27 @@ const DashboardPage = () => {
                 <CheckCircle2 size={16} />
               </div>
 
-              <div>
+              <div className="min-w-0">
 
                 <p className="text-sm font-medium text-emerald-400">
                   Recovery worker completed
                 </p>
 
-                <p className="mt-1 text-xs leading-5 text-slate-500">
+                <p className="mt-1 text-xs text-slate-500">
                   {workerResult.processed ?? 0} case
                   {(workerResult.processed ?? 0) === 1
                     ? ""
-                    : "s"} processed.
+                    : "s"} processed
+                  {" · "}
+                  {workerResult.recovered ?? 0} recovered
                 </p>
 
-                {(workerResult.recoveredAmount ??
-                  workerResult.amountRecovered) != null && (
-                  <p className="mt-1 text-xs text-slate-400">
-                    Recovered{" "}
-                    {formatINR(
-                      workerResult.recoveredAmount ??
-                      workerResult.amountRecovered
-                    )}
-                  </p>
-                )}
+                <p className="mt-1 text-sm font-semibold text-white">
+                  {formatINR(
+                    workerResult.recoveredAmount ??
+                    0
+                  )} recovered
+                </p>
 
               </div>
 
@@ -619,8 +766,8 @@ const DashboardPage = () => {
         />
 
         <KPI
-          label="Recovery Rate"
-          value={`${metrics.recoveryRate}%`}
+          label="Revenue Recovery Rate"
+          value={`${metrics.revenueRecoveryRate ?? metrics.recoveryRate}%`}
           icon={Activity}
         />
 

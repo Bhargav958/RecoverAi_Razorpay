@@ -22,22 +22,164 @@ const getAnalytics = async (req, res) => {
             merchantId: merchant._id
           }
         },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Join the linked payment
+        |--------------------------------------------------------------------------
+        */
+
+        {
+          $lookup: {
+            from: "payments",
+            localField: "paymentId",
+            foreignField: "_id",
+            as: "payment"
+          }
+        },
+
+        {
+          $unwind: {
+            path: "$payment",
+            preserveNullAndEmptyArrays: true
+          }
+        },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Determine the effective root cause
+        |--------------------------------------------------------------------------
+        |
+        | Prefer the AI-diagnosed RecoveryCase root cause.
+        |
+        | If the case is still UNKNOWN, use the payment failure code
+        | as a fallback so analytics remains informative.
+        |
+        |--------------------------------------------------------------------------
+        */
+
+        {
+          $addFields: {
+            effectiveRootCause: {
+              $cond: [
+                {
+                  $and: [
+                    {
+                      $ne: [
+                        "$rootCause",
+                        "UNKNOWN"
+                      ]
+                    },
+                    {
+                      $ne: [
+                        "$rootCause",
+                        null
+                      ]
+                    }
+                  ]
+                },
+
+                "$rootCause",
+
+                {
+                  $switch: {
+                    branches: [
+                      {
+                        case: {
+                          $eq: [
+                            "$payment.failureCode",
+                            "BANK_TEMPORARY_FAILURE"
+                          ]
+                        },
+                        then:
+                          "TEMPORARY_BANK_FAILURE"
+                      },
+
+                      {
+                        case: {
+                          $eq: [
+                            "$payment.failureCode",
+                            "INSUFFICIENT_FUNDS"
+                          ]
+                        },
+                        then:
+                          "INSUFFICIENT_FUNDS"
+                      },
+
+                      {
+                        case: {
+                          $eq: [
+                            "$payment.failureCode",
+                            "PAYMENT_METHOD_EXPIRED"
+                          ]
+                        },
+                        then:
+                          "EXPIRED_PAYMENT_METHOD"
+                      },
+
+                      {
+                        case: {
+                          $eq: [
+                            "$payment.failureCode",
+                            "AUTHENTICATION_FAILURE"
+                          ]
+                        },
+                        then:
+                          "AUTHENTICATION_FAILURE"
+                      },
+
+                      {
+                        case: {
+                          $eq: [
+                            "$payment.failureCode",
+                            "GATEWAY_TIMEOUT"
+                          ]
+                        },
+                        then:
+                          "GATEWAY_TIMEOUT"
+                      }
+                    ],
+
+                    default:
+                      "UNKNOWN"
+                  }
+                }
+              ]
+            }
+          }
+        },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Group by effective root cause
+        |--------------------------------------------------------------------------
+        */
+
         {
           $group: {
-            _id: "$rootCause",
+            _id: "$effectiveRootCause",
+
             cases: {
               $sum: 1
             },
+
             revenueAtRisk: {
               $sum: "$amountAtRisk"
             },
+
             recoveredAmount: {
               $sum: "$amountRecovered"
             },
+
             recoveredCases: {
               $sum: {
                 $cond: [
-                  { $eq: ["$status", "RECOVERED"] },
+                  {
+                    $eq: [
+                      "$status",
+                      "RECOVERED"
+                    ]
+                  },
                   1,
                   0
                 ]
@@ -45,6 +187,7 @@ const getAnalytics = async (req, res) => {
             }
           }
         },
+
         {
           $sort: {
             revenueAtRisk: -1

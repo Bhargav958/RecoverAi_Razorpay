@@ -13,11 +13,13 @@ import {
   BrainCircuit,
   LockKeyhole,
   Info,
-  RefreshCw
+  RefreshCw,
+  Save
 } from "lucide-react";
 
 import {
-  getMerchantPolicy
+  getMerchantPolicy,
+  updateMerchantPolicy
 } from "../services/api.js";
 
 const formatINR = (value) => {
@@ -91,6 +93,21 @@ const PoliciesPage = () => {
     setError
   ] = useState("");
 
+  const [
+    form,
+    setForm
+  ] = useState({});
+
+  const [
+    saving,
+    setSaving
+  ] = useState(false);
+
+  const [
+    saved,
+    setSaved
+  ] = useState("");
+
   const loadPolicy = async () => {
     try {
       setLoading(true);
@@ -102,6 +119,23 @@ const PoliciesPage = () => {
       setPolicy(
         response.data.policy
       );
+
+      setForm({
+        maxRetries:
+          response.data.policy.maxRetries,
+        minRetryIntervalHours:
+          response.data.policy.minRetryIntervalHours,
+        maxMessages:
+          response.data.policy.maxMessages,
+        minMessageIntervalHours:
+          response.data.policy.minMessageIntervalHours,
+        recoveryWindowDays:
+          response.data.policy.recoveryWindowDays,
+        humanEscalationThreshold:
+          response.data.policy.humanEscalationThreshold,
+        minimumAIConfidence:
+          response.data.policy.minimumAIConfidence
+      });
 
       setMerchant(
         response.data.merchant
@@ -118,6 +152,44 @@ const PoliciesPage = () => {
   useEffect(() => {
     loadPolicy();
   }, []);
+
+  const handleFieldChange = (
+    field,
+    value
+  ) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value
+    }));
+    setSaved("");
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      setError("");
+      setSaved("");
+
+      const response =
+        await updateMerchantPolicy(
+          form
+        );
+
+      setPolicy(
+        response.data.policy
+      );
+
+      setSaved(
+        "Policy saved successfully."
+      );
+    } catch (err) {
+      setError(
+        err.message
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -235,6 +307,75 @@ const PoliciesPage = () => {
         </div>
 
       </div>
+
+      {saved && (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-400">
+          {saved}
+        </div>
+      )}
+
+      <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">
+              Edit Recovery Guardrails
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+              These values are enforced by the policy engine before
+              any AI-recommended action can be executed.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-slate-950 hover:bg-slate-200 disabled:opacity-50"
+          >
+            <Save size={15} />
+            {saving ? "Saving..." : "Save Policy"}
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[
+            ["maxRetries", "Maximum retries", 0],
+            ["minRetryIntervalHours", "Minimum retry interval hours", 0],
+            ["maxMessages", "Maximum messages", 0],
+            ["minMessageIntervalHours", "Minimum message interval hours", 0],
+            ["recoveryWindowDays", "Recovery window days", 1],
+            ["humanEscalationThreshold", "Human escalation threshold", 0],
+            ["minimumAIConfidence", "Minimum AI confidence", 0]
+          ].map(([field, label, min]) => (
+            <label
+              key={field}
+              className="block rounded-xl border border-slate-800 bg-slate-950 p-4"
+            >
+              <span className="text-xs text-slate-500">
+                {label}
+              </span>
+              <input
+                type="number"
+                min={min}
+                max={
+                  field ===
+                  "minimumAIConfidence"
+                    ? 100
+                    : undefined
+                }
+                value={form[field] ?? ""}
+                onChange={(event) =>
+                  handleFieldChange(
+                    field,
+                    event.target.value
+                  )
+                }
+                className="mt-2 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-slate-600"
+              />
+            </label>
+          ))}
+        </div>
+      </section>
 
       {/* Retry */}
       <section>
@@ -450,7 +591,7 @@ const PoliciesPage = () => {
 
       </section>
 
-      {/* Read only notice */}
+      {/* Safety notice */}
       <div className="flex gap-3 rounded-xl border border-slate-800 bg-slate-950 p-4">
 
         <LockKeyhole
@@ -459,9 +600,8 @@ const PoliciesPage = () => {
         />
 
         <p className="text-xs leading-5 text-slate-600">
-          Policy editing is intentionally disabled in this version.
-          Recovery limits should be changed through controlled merchant
-          configuration rather than directly by the AI agent.
+          Policy edits update merchant configuration only. The AI still
+          cannot bypass these deterministic limits or access secrets.
         </p>
 
       </div>

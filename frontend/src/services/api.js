@@ -30,6 +30,12 @@ const getDashboardSummary =
     );
   };
 
+const getAnalytics = async () => {
+  return request(
+    "/analytics"
+  );
+};
+
 const getRecoveryCases = async ({
   page = 1,
   limit = 25,
@@ -81,6 +87,68 @@ const getRecoveryCases = async ({
 const getRecoveryCase = async (id) => {
   return request(
     `/recovery/cases/${id}`
+  );
+};
+
+const getCustomers = async ({
+  page = 1,
+  limit = 25,
+  search = "",
+  sort = "ltv"
+} = {}) => {
+  const params =
+    new URLSearchParams();
+
+  params.set("page", page);
+  params.set("limit", limit);
+  params.set("sort", sort);
+
+  if (search.trim()) {
+    params.set("search", search.trim());
+  }
+
+  return request(
+    `/customers?${params.toString()}`
+  );
+};
+
+const getCustomer = async (id) => {
+  return request(
+    `/customers/${id}`
+  );
+};
+
+const getPayments = async ({
+  page = 1,
+  limit = 25,
+  search = "",
+  status = "ALL"
+} = {}) => {
+  const params =
+    new URLSearchParams();
+
+  params.set("page", page);
+  params.set("limit", limit);
+
+  if (search.trim()) {
+    params.set("search", search.trim());
+  }
+
+  if (
+    status &&
+    status !== "ALL"
+  ) {
+    params.set("status", status);
+  }
+
+  return request(
+    `/payments?${params.toString()}`
+  );
+};
+
+const getPayment = async (id) => {
+  return request(
+    `/payments/${id}`
   );
 };
 
@@ -143,6 +211,68 @@ const getMerchantPolicy = async () => {
     return request("/policies");
   };
 
+const runSimulationScenario = async (
+  scenario
+) => {
+  return request(
+    "/simulation/scenario",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        scenario
+      })
+    }
+  );
+};
+
+const updateMerchantPolicy = async (
+  values
+) => {
+  return request(
+    "/policies",
+    {
+      method: "PUT",
+      body: JSON.stringify(values)
+    }
+  );
+};
+
+const getAuditLogs = async ({
+  page = 1,
+  limit = 50,
+  search = "",
+  actor = "ALL",
+  eventType = "ALL"
+} = {}) => {
+  const params =
+    new URLSearchParams();
+
+  params.set("page", page);
+  params.set("limit", limit);
+
+  if (search.trim()) {
+    params.set("search", search.trim());
+  }
+
+  if (
+    actor &&
+    actor !== "ALL"
+  ) {
+    params.set("actor", actor);
+  }
+
+  if (
+    eventType &&
+    eventType !== "ALL"
+  ) {
+    params.set("eventType", eventType);
+  }
+
+  return request(
+    `/audit?${params.toString()}`
+  );
+};
+
 const getWebhookStatus = async () => {
     return request("/webhooks/status");
   };
@@ -188,33 +318,45 @@ const simulatePaymentFailure = async ({
   };
 
 const runRecoveryWorker = async ({
-    limit = 10,
-    mode = "SIMULATION",
-    ignoreSchedule = true
-  } = {}) => {
-    return request(
-      "/recovery/worker/run",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          limit,
-          mode,
-          ignoreSchedule
-        })
-      }
-    );
-  };
+  recoveryCaseId = null,
+  limit = 10,
+  mode = "SIMULATION",
+  ignoreSchedule = true
+} = {}) => {
+
+  return request(
+    "/recovery/worker/run",
+    {
+      method: "POST",
+
+      body: JSON.stringify({
+        recoveryCaseId,
+        limit,
+        mode,
+        ignoreSchedule
+      })
+    }
+  );
+};
 
 export {
   getDashboardSummary,
+  getAnalytics,
   getRecoveryCases,
   getRecoveryCase,
+  getCustomers,
+  getCustomer,
+  getPayments,
+  getPayment,
   processRecoveryCase,
   runRecoveryWorker,
   getRecoveryCaseAudit,
   runSimulation,
+  runSimulationScenario,
   getAgentActivity,
   getMerchantPolicy,
+  updateMerchantPolicy,
+  getAuditLogs,
   getWebhookStatus,
   approveEscalatedCase,
   rejectEscalatedCase,

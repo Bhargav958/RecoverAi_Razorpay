@@ -20,25 +20,13 @@ import AuditPage from "./pages/AuditPage.jsx";
 
 import SettingsPage from "./pages/SettingsPage.jsx";
 
-const Placeholder = ({title}) => {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <div className="text-center">
-        <p className="text-sm text-slate-500">
-          RecoverAI
-        </p>
+import CustomersPage from "./pages/CustomersPage.jsx";
 
-        <h1 className="mt-2 text-3xl font-semibold">
-          {title}
-        </h1>
+import CustomerDetailPage from "./pages/CustomerDetailPage.jsx";
 
-        <p className="mt-2 text-slate-500">
-          This module is coming next.
-        </p>
-      </div>
-    </div>
-  );
-};
+import PaymentsPage from "./pages/PaymentsPage.jsx";
+
+import PaymentDetailPage from "./pages/PaymentDetailPage.jsx";
 
 const App = () => {
   return (
@@ -73,7 +61,7 @@ const App = () => {
           <Route
             path="/revenue-risk"
             element={
-              <Placeholder title="Revenue Risk" />
+              <AnalyticsPage />
             }
           />
 
@@ -87,14 +75,28 @@ const App = () => {
           <Route
             path="/customers"
             element={
-              <Placeholder title="Customers" />
+              <CustomersPage />
+            }
+          />
+
+          <Route
+            path="/customers/:id"
+            element={
+              <CustomerDetailPage />
             }
           />
 
           <Route
             path="/payments"
             element={
-              <Placeholder title="Payments" />
+              <PaymentsPage />
+            }
+          />
+
+          <Route
+            path="/payments/:id"
+            element={
+              <PaymentDetailPage />
             }
           />
 

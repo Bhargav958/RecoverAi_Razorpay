@@ -11,12 +11,14 @@ import {
   AlertTriangle,
   Bot,
   Activity,
-  IndianRupee
+  IndianRupee,
+  RefreshCw
 } from "lucide-react";
 
 import {
   getDashboardSummary,
-  runSimulation
+  runSimulation,
+  runSimulationScenario
 } from "../services/api.js";
 
 const formatINR = (value) => {
@@ -73,9 +75,59 @@ const SimulationPage = () => {
   ] = useState(false);
 
   const [
+    runningScenario,
+    setRunningScenario
+  ] = useState(null);
+
+  const [
     error,
     setError
   ] = useState("");
+
+  const scenarios = [
+    {
+      id: "GOLDEN_CASE",
+      title: "Golden Case",
+      description: "Amit Singh, temporary bank failure, expected retry recovery.",
+      expected: "Moves to pending action, then recovers after worker execution."
+    },
+    {
+      id: "TEMPORARY_BANK_FAILURE",
+      title: "Temporary Bank Failure",
+      description: "A transient issuer-side failure with high recoverability.",
+      expected: "AI recommends retry within merchant policy."
+    },
+    {
+      id: "EXPIRED_PAYMENT_METHOD",
+      title: "Expired Payment Method",
+      description: "Card expiry requiring a different recovery intervention.",
+      expected: "AI diagnoses payment method issue."
+    },
+    {
+      id: "INSUFFICIENT_FUNDS",
+      title: "Insufficient Funds",
+      description: "Customer lacks balance at payment time.",
+      expected: "AI selects a lower-friction follow-up."
+    },
+    {
+      id: "AUTHENTICATION_FAILURE",
+      title: "Authentication Failure",
+      description: "Payment failed during authentication.",
+      expected: "AI identifies authentication failure."
+    },
+    {
+      id: "GATEWAY_TIMEOUT",
+      title: "Gateway Timeout",
+      description: "Infrastructure timeout during payment processing.",
+      expected: "AI recommends safe retry handling."
+    },
+    {
+      id: "HIGH_VALUE_ESCALATION",
+      title: "High Value Escalation",
+      description: "A ₹50,000 failed payment above the merchant threshold.",
+      expected: "Policy requires human approval before execution."
+    }
+  ];
 
   /*
   |--------------------------------------------------------------------------
@@ -141,6 +193,32 @@ const SimulationPage = () => {
     }
   };
 
+  const handleScenario = async (
+    scenario
+  ) => {
+    try {
+      setRunningScenario(scenario);
+      setError("");
+
+      const response =
+        await runSimulationScenario(
+          scenario
+        );
+
+      setSimulation(
+        response.data
+      );
+
+      await loadDashboard();
+    } catch (err) {
+      setError(
+        err.message
+      );
+    } finally {
+      setRunningScenario(null);
+    }
+  };
+
   /*
   |--------------------------------------------------------------------------
   | Refresh
@@ -188,7 +266,7 @@ const SimulationPage = () => {
   */
 
   const batchResult =
-    simulation || {
+    {
       selected: 0,
       processed: 0,
       recovered: 0,
@@ -197,7 +275,8 @@ const SimulationPage = () => {
       failedCases: 0,
       pending: 0,
       scheduled: 0,
-      immediate: 0
+      immediate: 0,
+      ...simulation
     };
 
   return (
@@ -274,34 +353,38 @@ const SimulationPage = () => {
 
       </div>
 
-      {/* Simulation controls */}
+      {/* Scenario controls */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
 
         <div className="flex flex-col gap-2">
           <p className="text-sm text-slate-500">
-            Batch Processing
+            Scenario Launcher
           </p>
 
           <h2 className="text-xl font-semibold">
-            Run Recovery Simulation
+            Run a Real Pipeline Scenario
           </h2>
 
           <p className="text-sm leading-6 text-slate-500">
-            Select a batch size. RecoverAI will process fresh
-            detected cases through risk analysis, AI diagnosis,
-            policy evaluation, execution and verification.
+            Each scenario creates a signed Razorpay-style failure
+            and sends it through the existing webhook pipeline.
           </p>
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
 
-          {[10, 25, 50].map(
-            (size) => (
+          {scenarios.map(
+            (scenario) => (
               <button
-                key={size}
-                disabled={running}
+                key={scenario.id}
+                disabled={
+                  running ||
+                  runningScenario !== null
+                }
                 onClick={() =>
-                  handleSimulation(size)
+                  handleScenario(
+                    scenario.id
+                  )
                 }
                 className="group rounded-xl border border-slate-700 bg-slate-950 p-5 text-left transition hover:border-slate-500 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -309,17 +392,29 @@ const SimulationPage = () => {
                 <div className="flex items-center justify-between">
 
                   <div>
-                    <p className="text-2xl font-semibold">
-                      {size}
+                    <p className="font-semibold">
+                      {scenario.title}
                     </p>
 
-                    <p className="mt-1 text-sm text-slate-500">
-                      recovery cases
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      {scenario.description}
+                    </p>
+
+                    <p className="mt-3 text-[11px] leading-5 text-slate-600">
+                      {scenario.expected}
                     </p>
                   </div>
 
                   <div className="rounded-full border border-slate-800 p-3 text-slate-400 group-hover:text-white">
-                    <Play size={16} />
+                    {runningScenario ===
+                    scenario.id ? (
+                      <RefreshCw
+                        size={16}
+                        className="animate-spin"
+                      />
+                    ) : (
+                      <Play size={16} />
+                    )}
                   </div>
 
                 </div>
@@ -337,6 +432,40 @@ const SimulationPage = () => {
           Simulation mode only — no real customer communication
           or live payment execution.
 
+        </div>
+
+      </div>
+
+      {/* Batch controls */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+
+        <div>
+          <p className="text-sm text-slate-500">
+            Batch Run
+          </p>
+          <h2 className="text-xl font-semibold">
+            Process Existing Detected Cases
+          </h2>
+        </div>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          {[10, 25, 50].map((size) => (
+            <button
+              key={size}
+              disabled={running}
+              onClick={() =>
+                handleSimulation(size)
+              }
+              className="rounded-xl border border-slate-700 bg-slate-950 p-5 text-left transition hover:border-slate-500 hover:bg-slate-900 disabled:opacity-50"
+            >
+              <p className="text-2xl font-semibold">
+                {size}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                recovery cases
+              </p>
+            </button>
+          ))}
         </div>
 
       </div>
@@ -408,6 +537,20 @@ const SimulationPage = () => {
             </div>
 
           </div>
+
+          {simulation.recoveryCaseId && (
+            <button
+              type="button"
+              onClick={() =>
+                (window.location.href =
+                  `/recovery-cases/${simulation.recoveryCaseId}`)
+              }
+              className="mt-5 inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-slate-300 hover:border-slate-500 hover:text-white"
+            >
+              Open resulting recovery case
+              <Play size={13} />
+            </button>
+          )}
 
           {/* Secondary */}
           <div className="mt-4 grid gap-4 md:grid-cols-4">
