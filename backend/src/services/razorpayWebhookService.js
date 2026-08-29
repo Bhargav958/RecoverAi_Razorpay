@@ -10,6 +10,8 @@ import {
   createAuditLog
 } from "./auditService.js";
 
+import { calculateRisk } from "./riskEngine.js";
+
 /*
 |--------------------------------------------------------------------------
 | Signature validation
@@ -247,6 +249,11 @@ const processPaymentFailed =
      * Prevent duplicate RecoveryCase for the same payment.
      */
 
+    const risk = calculateRisk({
+      payment,
+      customer
+    });
+
     let recoveryCase =
       await RecoveryCase.findOne({
         paymentId:
@@ -267,6 +274,18 @@ const processPaymentFailed =
 
           amountAtRisk:
             payment.amount,
+
+          riskScore:
+            risk.riskScore,
+
+          recoveryProbability:
+            risk.recoveryProbability,
+
+          expectedRecovery:
+            risk.expectedRecovery,
+
+          priorityScore:
+            risk.priorityScore,
 
           rootCause:
             "UNKNOWN",
@@ -298,6 +317,17 @@ const processPaymentFailed =
                 `₹${payment.amount.toLocaleString(
                   "en-IN"
                 )} Razorpay payment identified as at risk.`,
+
+              timestamp:
+                new Date()
+            },
+
+            {
+              event:
+                "RISK_ANALYSIS_COMPLETED",
+
+              description:
+                `Initial risk score ${risk.riskScore}/100. Recovery probability ${risk.recoveryProbability}%.`,
 
               timestamp:
                 new Date()

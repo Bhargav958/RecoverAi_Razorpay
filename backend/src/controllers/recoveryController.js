@@ -1,4 +1,5 @@
 import RecoveryCase from "../models/RecoveryCase.js";
+import Customer from "../models/Customer.js";
 import analyzeRecoveryCase from "../services/recoveryAnalysisService.js";
 import processRecoveryCase from "../services/recoveryOrchestrator.js";
 
@@ -98,123 +99,227 @@ export const processCase = async (req, res) => {
 
 
 export const getRecoveryCases = async (req, res) => {
-    try {
-      const merchant =
-        await getMerchant(
-          req.query.merchantId
+  try {
+    const {
+      page = 1,
+      limit = 25,
+      search = "",
+      status = "ALL",
+      sort = "priority"
+    } = req.query;
+
+    const parsedPage = Math.max(
+      Number(page) || 1,
+      1
+    );
+
+    const parsedLimit = Math.min(
+      Math.max(
+        Number(limit) || 25,
+        1
+      ),
+      100
+    );
+
+    const skip =
+      (parsedPage - 1) *
+      parsedLimit;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Find customers matching the search
+    |--------------------------------------------------------------------------
+    */
+
+    let matchingCustomerIds = [];
+
+    if (search.trim()) {
+      const customerMatches =
+        await Customer.find({
+          $or: [
+            {
+              name: {
+                $regex: search.trim(),
+                $options: "i"
+              }
+            },
+            {
+              email: {
+                $regex: search.trim(),
+                $options: "i"
+              }
+            }
+          ]
+        }).select("_id");
+
+      matchingCustomerIds =
+        customerMatches.map(
+          (customer) =>
+            customer._id
         );
+    }
 
-      const {
-        status,
-        rootCause,
-        minRisk,
-        maxRisk,
-        page = 1,
-        limit = 25
-      } = req.query;
+    /*
+    |--------------------------------------------------------------------------
+    | Build RecoveryCase filter
+    |--------------------------------------------------------------------------
+    */
 
-      const filter = {
-        merchantId: merchant._id
-      };
+    const filter = {};
 
-      /*
-       * Optional status filter
-       */
+    /*
+     * Status filter
+     */
 
-      if (status) {
-        filter.status = status;
-      }
+    if (
+      status &&
+      status !== "ALL"
+    ) {
+      filter.status = status;
+    }
 
-      /*
-       * Optional root cause filter
-       */
+    /*
+     * Search filter
+     *
+     * Search:
+     * - customer name
+     * - customer email
+     * - root cause
+     */
 
-      if (rootCause) {
-        filter.rootCause = rootCause;
-      }
-
-      /*
-       * Optional risk filters
-       */
-
-      if ( minRisk !== undefined || maxRisk !== undefined ) {
-        filter.riskScore = {};
-
-        if ( minRisk !== undefined ) {
-          filter.riskScore.$gte = Number(minRisk);
-        }
-
-        if ( maxRisk !== undefined ) {
-          filter.riskScore.$lte = Number(maxRisk);
-        }
-      }
-
-      const pageNumber =
-        Math.max(
-          Number(page), 1
-        );
-
-      const pageSize =
-        Math.min(
-          Math.max( Number(limit), 1 ), 100
-        );
-
-      const skip = (pageNumber - 1) * pageSize;
-
-      const [ cases, total ] = await Promise.all([
-        RecoveryCase.find(
-          filter
-        )
-          .populate(
-            "customerId",
-            "name email lifetimeValue segment preferredChannel"
-          )
-          .populate(
-            "paymentId",
-            "amount status method failureCode failureReason isSimulation razorpayPaymentId razorpayOrderId"
-          )
-          .sort({
-            priorityScore: -1,
-            updatedAt: -1
-          })
-          .skip(skip)
-          .limit(pageSize),
-
-        RecoveryCase.countDocuments(
-          filter
-        )
-      ]);
-
-      res.status(200).json({
-        success: true,
-
-        data: {
-          cases,
-
-          pagination: {
-            page: pageNumber,
-
-            limit: pageSize,
-
-            total,
-
-            totalPages: Math.ceil( total / pageSize )
+    if (search.trim()) {
+      filter.$or = [
+        {
+          customerId: {
+            $in: matchingCustomerIds
+          }
+        },
+        {
+          rootCause: {
+            $regex: search.trim(),
+            $options: "i"
           }
         }
-      });
-    } catch (error) {
-      console.error(
-        "Get recovery cases error:",
-        error.message
+      ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sorting
+    |--------------------------------------------------------------------------
+    */
+
+    let sortQuery = {
+      priorityScore: -1,
+      createdAt: 1
+    };
+
+    switch (sort) {
+      case "risk":
+        sortQuery = {
+          riskScore: -1,
+          createdAt: 1
+        };
+        break;
+
+      case "amount":
+        sortQuery = {
+          amountAtRisk: -1,
+          createdAt: 1
+        };
+        break;
+
+      case "recovery":
+        sortQuery = {
+          recoveryProbability: -1,
+          createdAt: 1
+        };
+        break;
+
+      case "newest":
+        sortQuery = {
+          createdAt: -1
+        };
+        break;
+
+      case "priority":
+      default:
+        sortQuery = {
+          priorityScore: -1,
+          createdAt: 1
+        };
+        break;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Count + fetch page
+    |--------------------------------------------------------------------------
+    */
+
+    const [
+      total,
+      cases
+    ] = await Promise.all([
+      RecoveryCase.countDocuments(
+        filter
+      ),
+
+      RecoveryCase.find(filter)
+        .populate(
+          "customerId",
+          "name email lifetimeValue segment preferredChannel"
+        )
+        .populate(
+          "paymentId",
+          "amount status method failureCode failureReason isSimulation razorpayPaymentId"
+        )
+        .sort(sortQuery)
+        .skip(skip)
+        .limit(parsedLimit)
+    ]);
+
+    const totalPages =
+      Math.max(
+        Math.ceil(
+          total / parsedLimit
+        ),
+        1
       );
 
-      res.status(500).json({
-        success: false,
-        message:
-          error.message
-      });
-    }
-  };
+    res.status(200).json({
+      success: true,
+
+      data: {
+        cases,
+
+        pagination: {
+          page: parsedPage,
+          limit: parsedLimit,
+          total,
+          totalPages
+        },
+
+        filters: {
+          search,
+          status,
+          sort
+        }
+      }
+    });
+  } catch (error) {
+    console.error(
+      "Get recovery cases error:",
+      error.message
+    );
+
+    res.status(500).json({
+      success: false,
+      message:
+        error.message
+    });
+  }
+};
   
 
 export const getRecoveryCaseAudit =

@@ -30,9 +30,50 @@ const getDashboardSummary =
     );
   };
 
-const getRecoveryCases = async (params = "") => {
+const getRecoveryCases = async ({
+  page = 1,
+  limit = 25,
+  search = "",
+  status = "ALL",
+  sort = "priority"
+} = {}) => {
+  const params =
+    new URLSearchParams();
+
+  params.set(
+    "page",
+    page
+  );
+
+  params.set(
+    "limit",
+    limit
+  );
+
+  if (search.trim()) {
+    params.set(
+      "search",
+      search.trim()
+    );
+  }
+
+  if (
+    status &&
+    status !== "ALL"
+  ) {
+    params.set(
+      "status",
+      status
+    );
+  }
+
+  params.set(
+    "sort",
+    sort
+  );
+
   return request(
-    `/recovery/cases${params}`
+    `/recovery/cases?${params.toString()}`
   );
 };
 

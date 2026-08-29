@@ -8,33 +8,50 @@ import processRazorpayWebhook
 
 dotenv.config();
 
+/*
+|--------------------------------------------------------------------------
+| Razorpay Webhook Test
+|--------------------------------------------------------------------------
+|
+| This test:
+|
+| 1. Creates a realistic payment.failed payload.
+| 2. Generates a valid HMAC signature.
+| 3. Sends it into the actual webhook service.
+| 4. Uses unique event/payment/order IDs on every run.
+| 5. Keeps the Node process alive so the asynchronous
+|    RecoverAI agent can finish.
+|
+|--------------------------------------------------------------------------
+*/
+
 const testWebhook = async () => {
   try {
     await connectDB();
 
     /*
-    |--------------------------------------------------------------------------
-    | Unique demo identifiers
-    |--------------------------------------------------------------------------
-    */
+     |--------------------------------------------------------------------------
+     | Unique IDs
+     |--------------------------------------------------------------------------
+     */
 
     const uniqueId =
       Date.now();
 
     const eventId =
-      `evt_demo_agent_${uniqueId}`;
+      `evt_demo_${uniqueId}`;
 
-    const razorpayPaymentId =
+    const paymentId =
       `pay_test_${uniqueId}`;
 
-    const razorpayOrderId =
+    const orderId =
       `order_test_${uniqueId}`;
 
     /*
-    |--------------------------------------------------------------------------
-    | Fake Razorpay webhook payload
-    |--------------------------------------------------------------------------
-    */
+     |--------------------------------------------------------------------------
+     | Simulated Razorpay payment.failed payload
+     |--------------------------------------------------------------------------
+     */
 
     const payload = {
       entity: "event",
@@ -53,7 +70,10 @@ const testWebhook = async () => {
         payment: {
           entity: {
             id:
-              razorpayPaymentId,
+              paymentId,
+
+            entity:
+              "payment",
 
             amount:
               4999,
@@ -65,7 +85,7 @@ const testWebhook = async () => {
               "failed",
 
             order_id:
-              razorpayOrderId,
+              orderId,
 
             method:
               "card",
@@ -92,10 +112,10 @@ const testWebhook = async () => {
     };
 
     /*
-    |--------------------------------------------------------------------------
-    | Convert payload to RAW JSON
-    |--------------------------------------------------------------------------
-    */
+     |--------------------------------------------------------------------------
+     | RAW BODY
+     |--------------------------------------------------------------------------
+     */
 
     const rawBody =
       JSON.stringify(
@@ -103,10 +123,10 @@ const testWebhook = async () => {
       );
 
     /*
-    |--------------------------------------------------------------------------
-    | Generate Razorpay-style HMAC signature
-    |--------------------------------------------------------------------------
-    */
+     |--------------------------------------------------------------------------
+     | Webhook Secret
+     |--------------------------------------------------------------------------
+     */
 
     const secret =
       process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -117,6 +137,12 @@ const testWebhook = async () => {
       );
     }
 
+    /*
+     |--------------------------------------------------------------------------
+     | Generate valid HMAC SHA-256 signature
+     |--------------------------------------------------------------------------
+     */
+
     const signature =
       crypto
         .createHmac(
@@ -126,11 +152,30 @@ const testWebhook = async () => {
         .update(rawBody)
         .digest("hex");
 
+    console.log(
+      "\n===== RAZORPAY WEBHOOK TEST =====\n"
+    );
+
+    console.log(
+      "Event ID:",
+      eventId
+    );
+
+    console.log(
+      "Payment ID:",
+      paymentId
+    );
+
+    console.log(
+      "Customer:",
+      "amit.singh@example.demo"
+    );
+
     /*
-    |--------------------------------------------------------------------------
-    | Send webhook into RecoverAI
-    |--------------------------------------------------------------------------
-    */
+     |--------------------------------------------------------------------------
+     | Send webhook into the actual service
+     |--------------------------------------------------------------------------
+     */
 
     const result =
       await processRazorpayWebhook({
@@ -138,33 +183,66 @@ const testWebhook = async () => {
 
         signature,
 
-        eventId
+        eventId,
+
+        /*
+         * Explicitly passing the same secret makes the test
+         * compatible with the existing webhook controller/service.
+         */
+
+        secret
       });
 
+    /*
+     |--------------------------------------------------------------------------
+     | Print only useful result information
+     |--------------------------------------------------------------------------
+     */
+
     console.log(
-      "\n===== RAZORPAY WEBHOOK TEST =====\n"
+      "\nWebhook Result:"
     );
 
     console.log(
       JSON.stringify(
-        result,
+        {
+          duplicate:
+            result.duplicate,
+
+          eventId:
+            result.eventId,
+
+          eventType:
+            result.eventType,
+
+          paymentId:
+            result.result?.payment?._id ||
+            result.result?.payment?.id ||
+            null,
+
+          recoveryCaseId:
+            result.result?.recoveryCase?._id ||
+            null,
+
+          status:
+            result.result?.recoveryCase?.status ||
+            null
+        },
         null,
         2
       )
     );
 
     /*
-    |--------------------------------------------------------------------------
-    | IMPORTANT
-    |--------------------------------------------------------------------------
-    |
-    | The webhook intentionally starts the recovery orchestrator
-    | asynchronously.
-    |
-    | Keep this test process alive long enough for the agent
-    | workflow to finish.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | Wait for asynchronous RecoverAI agent
+     |--------------------------------------------------------------------------
+     |
+     | The webhook itself intentionally returns before Gemini/policy/action
+     | processing is complete.
+     |
+     * Give the background agent enough time to finish in local development.
+     */
 
     console.log(
       "\n⏳ Waiting for RecoverAI agent workflow..."
@@ -179,28 +257,29 @@ const testWebhook = async () => {
     );
 
     console.log(
-      "\n✅ Webhook test process finished."
+      "\n✅ Webhook test finished."
     );
 
     console.log(
-      "Check the recovery case in MongoDB or through the API."
+      "The webhook event was accepted and the RecoverAI agent was started."
     );
 
     console.log(
       "\n==================================\n"
     );
 
-    await connectDB();
-
     process.exit(0);
-
   } catch (error) {
     console.error(
-      "\nWebhook test failed:"
+      "\n❌ Webhook test failed:\n"
     );
 
     console.error(
       error.message
+    );
+
+    console.error(
+      "\n==================================\n"
     );
 
     process.exit(1);
