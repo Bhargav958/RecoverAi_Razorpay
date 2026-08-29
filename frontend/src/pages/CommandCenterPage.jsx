@@ -20,6 +20,8 @@ import {
   rejectEscalatedCase
 } from "../services/api.js";
 
+import StatusBadge from "../componenets/StatusBadge.jsx";
+
 const formatINR = (value) => {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -65,72 +67,6 @@ const isLiveWebhookCase = (item) => {
   return (
     item.paymentId &&
     item.paymentId.isSimulation === false
-  );
-};
-
-const StatusBadge = ({ status }) => {
-  const config = {
-    RECOVERED: {
-      icon: CheckCircle2,
-      className:
-        "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-    },
-
-    PENDING_ACTION: {
-      icon: Clock3,
-      className:
-        "bg-amber-500/10 text-amber-400 border-amber-500/20"
-    },
-
-    ACTION_SELECTED: {
-      icon: Clock3,
-      className:
-        "bg-blue-500/10 text-blue-400 border-blue-500/20"
-    },
-
-    DETECTED: {
-      icon: AlertTriangle,
-      className:
-        "bg-red-500/10 text-red-400 border-red-500/20"
-    },
-
-    ANALYZING: {
-      icon: RefreshCw,
-      className:
-        "bg-purple-500/10 text-purple-400 border-purple-500/20"
-    },
-
-    FAILED: {
-      icon: AlertTriangle,
-      className:
-        "bg-red-500/10 text-red-400 border-red-500/20"
-    },
-
-    ESCALATED: {
-      icon: AlertTriangle,
-      className:
-        "bg-orange-500/10 text-orange-400 border-orange-500/20"
-    },
-
-    STOPPED: {
-      icon: CheckCircle2,
-      className:
-        "bg-slate-500/10 text-slate-400 border-slate-500/20"
-    }
-  };
-
-  const selected =
-    config[status] || config.DETECTED;
-
-  const Icon = selected.icon;
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${selected.className}`}
-    >
-      <Icon size={12} />
-      {status.replaceAll("_", " ")}
-    </span>
   );
 };
 
@@ -604,7 +540,7 @@ const CommandCenterPage = () => {
         ) : (
           <div className="overflow-x-auto">
 
-            <table className="w-full min-w-[1350px] text-left">
+            <table className="w-full min-w-337.5 text-left">
 
               <thead>
                 <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">

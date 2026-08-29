@@ -9,6 +9,7 @@ import {
   CircleDollarSign,
   Activity,
   Play,
+  Zap,
   RefreshCw,
   Bot,
   CheckCircle2,
@@ -20,8 +21,12 @@ import {
 import {
   getDashboardSummary,
   runSimulation,
-  getAgentActivity
+  runRecoveryWorker,
+  getAgentActivity,
+  simulatePaymentFailure
 } from "../services/api.js";
+
+import StatusBadge from "../componenets/StatusBadge.jsx";
 
 const formatINR = (value) => {
   return new Intl.NumberFormat("en-IN", {
@@ -90,42 +95,6 @@ const KPI = ({
   );
 };
 
-const StatusBadge = ({
-  status
-}) => {
-  let classes =
-    "border-slate-700 bg-slate-800 text-slate-300";
-
-  if (status === "RECOVERED") {
-    classes =
-      "border-emerald-500/20 bg-emerald-500/10 text-emerald-400";
-  }
-
-  if (
-    status === "PENDING_ACTION" ||
-    status === "ACTION_SELECTED"
-  ) {
-    classes =
-      "border-amber-500/20 bg-amber-500/10 text-amber-400";
-  }
-
-  if (
-    status === "FAILED" ||
-    status === "STOPPED"
-  ) {
-    classes =
-      "border-red-500/20 bg-red-500/10 text-red-400";
-  }
-
-  return (
-    <span
-      className={`inline-flex rounded-full border px-2.5 py-1 text-xs ${classes}`}
-    >
-      {formatText(status)}
-    </span>
-  );
-};
-
 const DashboardPage = () => {
   const [data, setData] =
     useState(null);
@@ -141,6 +110,22 @@ const DashboardPage = () => {
 
   const [error, setError] =
     useState("");
+
+  const [
+    demoLoading,
+    setDemoLoading
+  ] = useState(false);
+
+  const [
+    demoResult,
+    setDemoResult
+  ] = useState(null);
+
+  const [workerLoading, setWorkerLoading] =
+    useState(false);
+
+  const [workerResult, setWorkerResult] =
+    useState(null);
 
   /*
   |--------------------------------------------------------------------------
@@ -237,6 +222,75 @@ const DashboardPage = () => {
     }
   };
 
+  const handleDemoPaymentFailure = async () => {
+    try {
+      setDemoLoading(true);
+      setDemoResult(null);
+      setError("");
+
+      const response =
+        await simulatePaymentFailure({
+          email:
+            "amit.singh@example.demo",
+
+          amount:
+            4999,
+
+          method:
+            "card",
+
+          failureCode:
+            "BANK_TEMPORARY_FAILURE",
+
+          failureReason:
+            "Temporary bank-side payment failure"
+        });
+
+      setDemoResult(
+        response.data
+      );
+
+      /*
+       * Refresh dashboard immediately.
+       */
+
+      await loadData(false);
+    } catch (err) {
+      setError(
+        err.message
+      );
+    } finally {
+      setDemoLoading(false);
+    }
+  };
+
+  const handleRunWorker = async () => {
+    try {
+      setWorkerLoading(true);
+      setWorkerResult(null);
+      setError("");
+
+      const response =
+        await runRecoveryWorker({
+          limit: 10,
+          mode: "SIMULATION",
+          ignoreSchedule: true
+        });
+
+      setWorkerResult(
+        response.data
+      );
+
+      await loadData(false);
+    } catch (err) {
+      setError(
+        err.message
+      );
+    } finally {
+      setWorkerLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center text-slate-500">
@@ -315,6 +369,166 @@ const DashboardPage = () => {
 
       </div>
 
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+
+          <div>
+
+            <div className="flex items-center gap-2">
+
+              <div className="rounded-lg bg-violet-500/10 p-2 text-violet-400">
+                <Bot size={17} />
+              </div>
+
+              <div>
+
+                <p className="font-medium">
+                  Demo Controls
+                </p>
+
+                <p className="mt-1 text-xs text-slate-600">
+                  Trigger the same payment-failure pipeline used by the webhook.
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+
+            <button
+              type="button"
+              disabled={demoLoading}
+              onClick={
+                handleDemoPaymentFailure
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+
+              {demoLoading ? (
+                <>
+                  <RefreshCw
+                    size={15}
+                    className="animate-spin"
+                  />
+                  Sending Failure...
+                </>
+              ) : (
+                <>
+                  <Play size={15} />
+                  Simulate Payment Failure
+                </>
+              )}
+
+            </button>
+
+            <button
+              type="button"
+              disabled={
+                workerLoading
+              }
+              onClick={
+                handleRunWorker
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-5 py-3 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+
+              {workerLoading ? (
+                <>
+                  <RefreshCw
+                    size={15}
+                    className="animate-spin"
+                  />
+                  Running Worker...
+                </>
+              ) : (
+                <>
+                  <Zap size={15} />
+                  Run Recovery Worker
+                </>
+              )}
+
+            </button>
+
+          </div>
+
+        </div>
+
+        {demoResult && (
+          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+
+            <p className="text-sm font-medium text-emerald-400">
+              Payment failure received
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Recovery case{" "}
+              <span className="font-mono text-slate-400">
+                {demoResult.recoveryCaseId}
+              </span>{" "}
+              created successfully.
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                window.location.href =
+                  `/recovery-cases/${demoResult.recoveryCaseId}`
+              }
+              className="mt-3 inline-flex items-center gap-2 text-xs text-slate-300 hover:text-white"
+            >
+              Review recovery case
+              <ChevronRight size={13} />
+            </button>
+
+          </div>
+        )}
+
+        {workerResult && (
+          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+
+            <div className="flex items-start gap-3">
+
+              <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-400">
+                <CheckCircle2 size={16} />
+              </div>
+
+              <div>
+
+                <p className="text-sm font-medium text-emerald-400">
+                  Recovery worker completed
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {workerResult.processed ?? 0} case
+                  {(workerResult.processed ?? 0) === 1
+                    ? ""
+                    : "s"} processed.
+                </p>
+
+                {(workerResult.recoveredAmount ??
+                  workerResult.amountRecovered) != null && (
+                  <p className="mt-1 text-xs text-slate-400">
+                    Recovered{" "}
+                    {formatINR(
+                      workerResult.recoveredAmount ??
+                      workerResult.amountRecovered
+                    )}
+                  </p>
+                )}
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+      </div>
+
       {/* Error */}
       {error && (
         <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-4 text-sm text-red-300">
@@ -323,6 +537,60 @@ const DashboardPage = () => {
       )}
 
       {/* KPIs */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
+
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+
+          <div>
+
+            <div className="flex items-center gap-2 text-sm text-emerald-400">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+              RecoverAI is actively protecting revenue
+            </div>
+
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+              {formatINR(metrics.recoveredRevenue)}
+            </h2>
+
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
+              Revenue recovered from failed payments through
+              AI-driven diagnosis, policy enforcement and verified recovery.
+            </p>
+
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:min-w-75">
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+
+              <p className="text-xs text-slate-600">
+                Active Opportunities
+              </p>
+
+              <p className="mt-2 text-xl font-semibold">
+                {metrics.activeCases}
+              </p>
+
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+
+              <p className="text-xs text-slate-600">
+                Total Recovery Cases
+              </p>
+
+              <p className="mt-2 text-xl font-semibold">
+                {metrics.caseCount}
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 
         <KPI

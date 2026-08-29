@@ -10,7 +10,13 @@ import {
   Clock3,
   Bot,
   ShieldCheck,
-  CircleDollarSign
+  CircleDollarSign,
+  CreditCard,
+  User,
+  CalendarClock,
+  Zap,
+  RefreshCw,
+  ExternalLink
 } from "lucide-react";
 
 import {
@@ -25,6 +31,14 @@ import {
   useParams
 } from "react-router-dom";
 
+import StatusBadge
+  from "../componenets/StatusBadge.jsx";
+
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
 
 const formatINR = (value) => {
   return new Intl.NumberFormat(
@@ -48,32 +62,37 @@ const formatText = (value) => {
     );
 };
 
-const statusClass = (status) => {
-  if (status === "RECOVERED") {
-    return "border-emerald-500/20 bg-emerald-500/10 text-emerald-400";
+const truncateId = (
+  value,
+  length = 18
+) => {
+  if (!value) return "—";
+
+  const text =
+    value.toString();
+
+  if (text.length <= length) {
+    return text;
   }
 
-  if (
-    status === "FAILED" ||
-    status === "STOPPED"
-  ) {
-    return "border-red-500/20 bg-red-500/10 text-red-400";
-  }
-
-  if (
-    status === "PENDING_ACTION" ||
-    status === "ACTION_SELECTED"
-  ) {
-    return "border-amber-500/20 bg-amber-500/10 text-amber-400";
-  }
-
-  return "border-slate-700 bg-slate-800 text-slate-300";
+  return `${text.slice(
+    0,
+    length
+  )}...`;
 };
 
-const TimelineIcon = ({ event }) => {
+/*
+|--------------------------------------------------------------------------
+| Timeline Icon
+|--------------------------------------------------------------------------
+*/
+
+const TimelineIcon = ({
+  event
+}) => {
   if (
-    event.includes("RECOVERED") ||
-    event.includes("STOPPED")
+    event?.includes("RECOVERED") ||
+    event?.includes("STOPPED")
   ) {
     return (
       <CheckCircle2
@@ -84,7 +103,7 @@ const TimelineIcon = ({ event }) => {
   }
 
   if (
-    event.includes("POLICY")
+    event?.includes("POLICY")
   ) {
     return (
       <ShieldCheck
@@ -95,7 +114,7 @@ const TimelineIcon = ({ event }) => {
   }
 
   if (
-    event.includes("AI")
+    event?.includes("AI")
   ) {
     return (
       <Bot
@@ -106,7 +125,7 @@ const TimelineIcon = ({ event }) => {
   }
 
   if (
-    event.includes("ACTION")
+    event?.includes("ACTION")
   ) {
     return (
       <Clock3
@@ -117,7 +136,7 @@ const TimelineIcon = ({ event }) => {
   }
 
   if (
-    event.includes("RISK")
+    event?.includes("RISK")
   ) {
     return (
       <AlertTriangle
@@ -135,6 +154,97 @@ const TimelineIcon = ({ event }) => {
   );
 };
 
+/*
+|--------------------------------------------------------------------------
+| Small information row
+|--------------------------------------------------------------------------
+*/
+
+const InfoRow = ({
+  label,
+  value,
+  mono = false
+}) => {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-slate-800/70 py-3 last:border-0">
+
+      <span className="text-xs text-slate-500">
+        {label}
+      </span>
+
+      <span
+        className={`max-w-[65%] text-right text-sm text-slate-300 ${
+          mono
+            ? "font-mono text-xs"
+            : "font-medium"
+        }`}
+      >
+        {value || "—"}
+      </span>
+
+    </div>
+  );
+};
+
+/*
+|--------------------------------------------------------------------------
+| Metric Card
+|--------------------------------------------------------------------------
+*/
+
+const MetricCard = ({
+  label,
+  value,
+  description,
+  icon: Icon,
+  accent = false
+}) => {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+
+      <div className="flex items-center justify-between">
+
+        <p className="text-xs uppercase tracking-wider text-slate-500">
+          {label}
+        </p>
+
+        <div
+          className={`rounded-lg p-2 ${
+            accent
+              ? "bg-emerald-500/10 text-emerald-400"
+              : "bg-slate-800 text-slate-400"
+          }`}
+        >
+          <Icon size={16} />
+        </div>
+
+      </div>
+
+      <p
+        className={`mt-4 text-2xl font-semibold ${
+          accent
+            ? "text-emerald-400"
+            : "text-white"
+        }`}
+      >
+        {value}
+      </p>
+
+      {description && (
+        <p className="mt-1 text-xs text-slate-600">
+          {description}
+        </p>
+      )}
+
+    </div>
+  );
+};
+
+/*
+|--------------------------------------------------------------------------
+| Main Page
+|--------------------------------------------------------------------------
+*/
 
 const RecoveryCaseDetailPage =
   () => {
@@ -144,30 +254,118 @@ const RecoveryCaseDetailPage =
     const navigate =
       useNavigate();
 
-    const [recoveryCase, setRecoveryCase] =
-      useState(null);
+    const [
+      recoveryCase,
+      setRecoveryCase
+    ] = useState(null);
 
-    const [auditLogs, setAuditLogs] =
-      useState([]);
+    const [
+      auditLogs,
+      setAuditLogs
+    ] = useState([]);
 
-    const [loading, setLoading] =
-      useState(true);
+    const [
+      loading,
+      setLoading
+    ] = useState(true);
 
-    const [error, setError] =
-      useState("");
+    const [
+      error,
+      setError
+    ] = useState("");
 
-    const [reviewLoading, setReviewLoading] =
-      useState(false);
+    const [
+      reviewLoading,
+      setReviewLoading
+    ] = useState(false);
+
+    const [
+      refreshing,
+      setRefreshing
+    ] = useState(false);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load case
+    |--------------------------------------------------------------------------
+    */
+
+    const loadCase = async (
+      showRefreshing = false
+    ) => {
+      try {
+        if (showRefreshing) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+
+        setError("");
+
+        const [
+          caseResponse,
+          auditResponse
+        ] = await Promise.all([
+          getRecoveryCase(id),
+          getRecoveryCaseAudit(id)
+        ]);
+
+        setRecoveryCase(
+          caseResponse.data
+        );
+
+        setAuditLogs(
+          auditResponse.data || []
+        );
+      } catch (err) {
+        setError(
+          err.message
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Initial load + live refresh
+    |--------------------------------------------------------------------------
+    */
+
+    useEffect(() => {
+      loadCase();
+
+      const interval =
+        setInterval(
+          () => loadCase(true),
+          5000
+        );
+
+      return () =>
+        clearInterval(interval);
+    }, [id]);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Escalation actions
+    |--------------------------------------------------------------------------
+    */
 
     const handleApprove = async () => {
       try {
         setReviewLoading(true);
+        setError("");
 
-        await approveEscalatedCase(id);
+        await approveEscalatedCase(
+          id
+        );
 
-        window.location.reload();
+        await loadCase(true);
       } catch (err) {
-        setError(err.message);
+        setError(
+          err.message
+        );
       } finally {
         setReviewLoading(false);
       }
@@ -176,61 +374,54 @@ const RecoveryCaseDetailPage =
     const handleReject = async () => {
       try {
         setReviewLoading(true);
+        setError("");
 
-        await rejectEscalatedCase(id);
+        await rejectEscalatedCase(
+          id
+        );
 
-        window.location.reload();
+        await loadCase(true);
       } catch (err) {
-        setError(err.message);
+        setError(
+          err.message
+        );
       } finally {
         setReviewLoading(false);
       }
     };
 
-    useEffect(() => {
-      const loadCase = async () => {
-        try {
-          setLoading(true);
-
-          const [
-            caseResponse,
-            auditResponse
-          ] = await Promise.all([
-            getRecoveryCase(id),
-            getRecoveryCaseAudit(id)
-          ]);
-
-          setRecoveryCase(
-            caseResponse.data
-          );
-
-          setAuditLogs(
-            auditResponse.data || []
-          );
-        } catch (err) {
-          setError(
-            err.message
-          );
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      loadCase();
-    }, [id]);
+    /*
+    |--------------------------------------------------------------------------
+    | Loading
+    |--------------------------------------------------------------------------
+    */
 
     if (loading) {
       return (
-        <div className="flex min-h-[60vh] items-center justify-center text-slate-500">
-          Loading recovery case...
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="flex items-center gap-3 text-sm text-slate-500">
+            <RefreshCw
+              size={16}
+              className="animate-spin"
+            />
+            Loading recovery case...
+          </div>
         </div>
       );
     }
 
-    if (error) {
+    /*
+    |--------------------------------------------------------------------------
+    | Error
+    |--------------------------------------------------------------------------
+    */
+
+    if (error && !recoveryCase) {
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
+
           <button
+            type="button"
             onClick={() =>
               navigate(
                 "/command-center"
@@ -238,13 +429,16 @@ const RecoveryCaseDetailPage =
             }
             className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft
+              size={16}
+            />
             Back to Command Center
           </button>
 
-          <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-6 text-red-300">
+          <div className="rounded-2xl border border-red-900/40 bg-red-950/20 p-6 text-sm text-red-300">
             {error}
           </div>
+
         </div>
       );
     }
@@ -259,75 +453,180 @@ const RecoveryCaseDetailPage =
     const payment =
       recoveryCase.paymentId;
 
+    const isRecovered =
+      recoveryCase.status ===
+      "RECOVERED";
+
+    const isLivePayment =
+      payment?.isSimulation ===
+      false;
+
+    const riskLabel =
+      recoveryCase.riskScore >= 80
+        ? "Critical"
+        : recoveryCase.riskScore >= 60
+          ? "High"
+          : recoveryCase.riskScore >= 40
+            ? "Medium"
+            : "Low";
+
+    /*
+    |--------------------------------------------------------------------------
+    | Render
+    |--------------------------------------------------------------------------
+    */
+
     return (
-      <div className="space-y-8">
+      <div className="space-y-7">
 
-        {/* Back */}
-        <button
-          onClick={() =>
-            navigate(
-              "/command-center"
-            )
-          }
-          className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
-        >
-          <ArrowLeft size={16} />
-          Back to Command Center
-        </button>
+        {/* Back + refresh */}
+        <div className="flex items-center justify-between">
 
-        {/* Header */}
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <button
+            type="button"
+            onClick={() =>
+              navigate(
+                "/command-center"
+              )
+            }
+            className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
+          >
+            <ArrowLeft
+              size={16}
+            />
+            Back to Command Center
+          </button>
 
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-semibold tracking-tight">
-                {customer?.name ||
-                  "Unknown Customer"}
-              </h1>
+          <button
+            type="button"
+            onClick={() =>
+              loadCase(true)
+            }
+            disabled={refreshing}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400 transition hover:text-white disabled:opacity-50"
+          >
+            <RefreshCw
+              size={14}
+              className={
+                refreshing
+                  ? "animate-spin"
+                  : ""
+              }
+            />
+            Refresh
+          </button>
 
-              <span
-                className={`rounded-full border px-3 py-1 text-xs ${statusClass(
-                  recoveryCase.status
-                )}`}
-              >
-                {formatText(
-                  recoveryCase.status
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-4 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+
+        {/* Hero */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
+
+          <div className="flex flex-col gap-7 xl:flex-row xl:items-start xl:justify-between">
+
+            <div>
+
+              <div className="flex flex-wrap items-center gap-3">
+
+                <h1 className="text-3xl font-semibold tracking-tight">
+                  {customer?.name ||
+                    "Unknown Customer"}
+                </h1>
+
+                <StatusBadge
+                  status={
+                    recoveryCase.status
+                  }
+                />
+
+                {isLivePayment && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-xs text-blue-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+                    Razorpay
+                  </span>
                 )}
-              </span>
+
+              </div>
+
+              <p className="mt-2 text-sm text-slate-500">
+                {customer?.email}
+              </p>
+
+              <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-600">
+
+                <span>
+                  Case{" "}
+                  <span className="font-mono text-slate-500">
+                    {truncateId(
+                      recoveryCase._id
+                    )}
+                  </span>
+                </span>
+
+                <span>
+                  Payment{" "}
+                  <span className="font-mono text-slate-500">
+                    {truncateId(
+                      payment?.razorpayPaymentId
+                    )}
+                  </span>
+                </span>
+
+              </div>
+
             </div>
 
-            <p className="mt-2 text-sm text-slate-500">
-              {customer?.email}
-            </p>
+            <div className="xl:text-right">
 
-            <p className="mt-1 text-xs text-slate-600">
-              Recovery Case {recoveryCase._id}
-            </p>
-          </div>
+              <p className="text-xs uppercase tracking-wider text-slate-500">
+                Revenue Recovered
+              </p>
 
-          <div className="text-left xl:text-right">
-            <p className="text-xs uppercase tracking-wider text-slate-500">
-              Revenue Recovered
-            </p>
+              <p
+                className={`mt-2 text-4xl font-semibold ${
+                  isRecovered
+                    ? "text-emerald-400"
+                    : "text-white"
+                }`}
+              >
+                {formatINR(
+                  recoveryCase.amountRecovered
+                )}
+              </p>
 
-            <p className="mt-1 text-3xl font-semibold text-emerald-400">
-              {formatINR(
-                recoveryCase.amountRecovered
-              )}
-            </p>
+              <p className="mt-1 text-xs text-slate-600">
+                of{" "}
+                {formatINR(
+                  recoveryCase.amountAtRisk
+                )}{" "}
+                at risk
+              </p>
+
+            </div>
+
           </div>
 
         </div>
 
-        {recoveryCase.status === "ESCALATED" && (
+        {/* Human review */}
+        {recoveryCase.status ===
+          "ESCALATED" && (
           <div className="rounded-2xl border border-orange-500/20 bg-orange-500/5 p-6">
 
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
 
-              <div className="flex gap-4">
+              <div className="flex items-start gap-4">
 
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-orange-500/20 bg-orange-500/10 text-orange-400">
-                  <AlertTriangle size={18} />
+                  <AlertTriangle
+                    size={18}
+                  />
                 </div>
 
                 <div>
@@ -337,12 +636,12 @@ const RecoveryCaseDetailPage =
                   </h2>
 
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                    RecoverAI has paused autonomous execution because
-                    this case requires merchant approval.
+                    RecoverAI paused autonomous execution
+                    because this case requires merchant approval.
                   </p>
 
                   {recoveryCase.stoppedReason && (
-                    <p className="mt-3 text-xs text-slate-500">
+                    <p className="mt-2 text-xs text-slate-600">
                       {recoveryCase.stoppedReason}
                     </p>
                   )}
@@ -354,22 +653,34 @@ const RecoveryCaseDetailPage =
               <div className="flex gap-2">
 
                 <button
-                  onClick={handleApprove}
-                  disabled={reviewLoading}
+                  type="button"
+                  onClick={
+                    handleApprove
+                  }
+                  disabled={
+                    reviewLoading
+                  }
                   className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-slate-950 hover:bg-slate-200 disabled:opacity-50"
                 >
-                  <CheckCircle2 size={15} />
-
+                  <CheckCircle2
+                    size={15}
+                  />
                   Approve Recovery
                 </button>
 
                 <button
-                  onClick={handleReject}
-                  disabled={reviewLoading}
+                  type="button"
+                  onClick={
+                    handleReject
+                  }
+                  disabled={
+                    reviewLoading
+                  }
                   className="inline-flex items-center gap-2 rounded-lg border border-red-900/50 bg-red-950/20 px-4 py-2.5 text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-50"
                 >
-                  <AlertTriangle size={15} />
-
+                  <AlertTriangle
+                    size={15}
+                  />
                   Stop
                 </button>
 
@@ -380,71 +691,83 @@ const RecoveryCaseDetailPage =
           </div>
         )}
 
-        {/* KPI */}
-        <div className="grid gap-4 md:grid-cols-4">
+        {/* Metrics */}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-500">
-              Amount at Risk
-            </p>
+          <MetricCard
+            label="Amount at Risk"
+            value={formatINR(
+              recoveryCase.amountAtRisk
+            )}
+            description={`Expected recovery ${formatINR(
+              recoveryCase.expectedRecovery
+            )}`}
+            icon={CircleDollarSign}
+          />
 
-            <p className="mt-3 text-2xl font-semibold">
-              {formatINR(
-                recoveryCase.amountAtRisk
-              )}
-            </p>
-          </div>
+          <MetricCard
+            label="Risk Score"
+            value={`${recoveryCase.riskScore}/100`}
+            description={riskLabel}
+            icon={AlertTriangle}
+          />
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-500">
-              Risk Score
-            </p>
+          <MetricCard
+            label="Recovery Probability"
+            value={`${recoveryCase.recoveryProbability}%`}
+            description={
+              recoveryCase.recoveryProbability >=
+              70
+                ? "Strong recovery opportunity"
+                : "Moderate opportunity"
+            }
+            icon={Zap}
+          />
 
-            <p className="mt-3 text-2xl font-semibold">
-              {recoveryCase.riskScore}/100
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-500">
-              Recovery Probability
-            </p>
-
-            <p className="mt-3 text-2xl font-semibold">
-              {recoveryCase.recoveryProbability}%
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-500">
-              AI Confidence
-            </p>
-
-            <p className="mt-3 text-2xl font-semibold">
-              {recoveryCase.diagnosisConfidence
+          <MetricCard
+            label="AI Confidence"
+            value={
+              recoveryCase.diagnosisConfidence
                 ? `${recoveryCase.diagnosisConfidence}%`
-                : "Not analyzed"}
-            </p>
-          </div>
+                : "—"
+            }
+            description={
+              recoveryCase.rootCause ===
+              "UNKNOWN"
+                ? "Analysis pending"
+                : "Diagnosis confidence"
+            }
+            icon={Bot}
+          />
 
         </div>
 
-        {/* Main grid */}
+        {/* Main content */}
         <div className="grid gap-6 xl:grid-cols-3">
 
-          {/* Left — diagnosis */}
+          {/* LEFT */}
           <div className="space-y-6 xl:col-span-2">
 
+            {/* AI Diagnosis */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
 
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start justify-between gap-5">
 
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-slate-500">
-                    Root Cause
-                  </p>
 
-                  <h2 className="mt-2 text-xl font-semibold">
+                  <div className="flex items-center gap-2">
+
+                    <div className="rounded-lg bg-violet-500/10 p-2 text-violet-400">
+                      <Bot size={17} />
+                    </div>
+
+                    <p className="text-xs uppercase tracking-wider text-slate-500">
+                      AI Diagnosis
+                    </p>
+
+                  </div>
+
+                  <h2 className="mt-4 text-2xl font-semibold">
                     {recoveryCase.rootCause ===
                     "UNKNOWN"
                       ? "Awaiting AI analysis"
@@ -452,34 +775,63 @@ const RecoveryCaseDetailPage =
                           recoveryCase.rootCause
                         )}
                   </h2>
+
                 </div>
 
-                <Bot
-                  size={20}
-                  className="text-violet-400"
-                />
+                {recoveryCase.diagnosisConfidence >
+                  0 && (
+                  <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-xs text-violet-400">
+                    {
+                      recoveryCase.diagnosisConfidence
+                    }
+                    % confidence
+                  </span>
+                )}
 
               </div>
 
-              <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950 p-5">
+              <div className="mt-6 grid gap-4 lg:grid-cols-2">
 
-                <p className="text-sm text-slate-400">
-                  AI Recommendation
-                </p>
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-5">
 
-                <p className="mt-2 text-lg font-medium">
-                  {recoveryCase.recommendedAction
-                    ? formatText(
-                        recoveryCase.recommendedAction
-                      )
-                    : "Awaiting agent analysis"}
-                </p>
-
-                {recoveryCase.aiReason && (
-                  <p className="mt-3 text-sm leading-6 text-slate-400">
-                    {recoveryCase.aiReason}
+                  <p className="text-xs uppercase tracking-wider text-slate-600">
+                    Recommended Action
                   </p>
-                )}
+
+                  <p className="mt-3 text-lg font-medium text-white">
+                    {recoveryCase.recommendedAction
+                      ? formatText(
+                          recoveryCase.recommendedAction
+                        )
+                      : "Awaiting agent analysis"}
+                  </p>
+
+                  {recoveryCase.nextActionAt && (
+                    <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                      <CalendarClock
+                        size={14}
+                      />
+                      Scheduled for{" "}
+                      {new Date(
+                        recoveryCase.nextActionAt
+                      ).toLocaleString()}
+                    </div>
+                  )}
+
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-5">
+
+                  <p className="text-xs uppercase tracking-wider text-slate-600">
+                    AI Reasoning
+                  </p>
+
+                  <p className="mt-3 text-sm leading-6 text-slate-400">
+                    {recoveryCase.aiReason ||
+                      "AI reasoning will appear after diagnosis."}
+                  </p>
+
+                </div>
 
               </div>
 
@@ -488,34 +840,58 @@ const RecoveryCaseDetailPage =
             {/* Evidence */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
 
-              <h2 className="text-lg font-semibold">
-                Evidence
-              </h2>
+              <div className="flex items-center justify-between">
+
+                <div>
+
+                  <h2 className="text-lg font-semibold">
+                    Evidence
+                  </h2>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    Signals used by the recovery agent.
+                  </p>
+
+                </div>
+
+                <ShieldCheck
+                  size={18}
+                  className="text-slate-500"
+                />
+
+              </div>
 
               <div className="mt-5 space-y-3">
 
                 {recoveryCase.evidence?.length ? (
                   recoveryCase.evidence.map(
-                    (item, index) => (
+                    (
+                      item,
+                      index
+                    ) => (
                       <div
-                        key={index}
-                        className="flex gap-3 rounded-lg border border-slate-800 bg-slate-950 p-3"
+                        key={
+                          index
+                        }
+                        className="flex gap-3 rounded-xl border border-slate-800 bg-slate-950 p-4"
                       >
+
                         <CheckCircle2
                           size={16}
                           className="mt-0.5 shrink-0 text-emerald-400"
                         />
 
-                        <p className="text-sm text-slate-300">
+                        <p className="text-sm leading-6 text-slate-300">
                           {item}
                         </p>
+
                       </div>
                     )
                   )
                 ) : (
-                  <p className="text-sm text-slate-500">
+                  <div className="rounded-xl border border-dashed border-slate-800 p-6 text-center text-sm text-slate-600">
                     No AI evidence available yet.
-                  </p>
+                  </div>
                 )}
 
               </div>
@@ -525,51 +901,102 @@ const RecoveryCaseDetailPage =
             {/* Timeline */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
 
-              <h2 className="text-lg font-semibold">
-                Recovery Timeline
-              </h2>
+              <div className="flex items-center justify-between">
 
-              <div className="mt-6">
+                <div>
+
+                  <h2 className="text-lg font-semibold">
+                    Recovery Timeline
+                  </h2>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    Every stage of this recovery case.
+                  </p>
+
+                </div>
+
+                <span className="text-xs text-slate-600">
+                  {recoveryCase.timeline?.length ||
+                    0}{" "}
+                  events
+                </span>
+
+              </div>
+
+              <div className="mt-7">
 
                 {recoveryCase.timeline?.map(
-                  (event, index) => (
-                    <div
-                      key={`${event.event}-${index}`}
-                      className="relative flex gap-4 pb-7 last:pb-0"
-                    >
+                  (
+                    event,
+                    index
+                  ) => {
 
-                      {index !==
-                        recoveryCase.timeline.length -
-                          1 && (
-                        <div className="absolute left-2 top-5 h-full w-px bg-slate-800" />
-                      )}
+                    const isLast =
+                      index ===
+                      recoveryCase.timeline.length -
+                        1;
 
-                      <div className="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center">
-                        <TimelineIcon
-                          event={event.event}
-                        />
+                    const isSuccess =
+                      event.event?.includes(
+                        "RECOVERED"
+                      ) ||
+                      event.event?.includes(
+                        "STOPPED"
+                      );
+
+                    return (
+                      <div
+                        key={`${event.event}-${index}`}
+                        className="relative flex gap-4 pb-7 last:pb-0"
+                      >
+
+                        {!isLast && (
+                          <div className="absolute left-2 top-6 h-full w-px bg-slate-800" />
+                        )}
+
+                        <div
+                          className={`relative z-10 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-950 ${
+                            isSuccess
+                              ? "ring-1 ring-emerald-500/20"
+                              : ""
+                          }`}
+                        >
+                          <TimelineIcon
+                            event={
+                              event.event
+                            }
+                          />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+
+                            <p className="text-sm font-medium">
+                              {formatText(
+                                event.event
+                              )}
+                            </p>
+
+                            <p className="text-[11px] text-slate-700">
+                              {new Date(
+                                event.timestamp
+                              ).toLocaleString()}
+                            </p>
+
+                          </div>
+
+                          <p className="mt-2 text-sm leading-6 text-slate-500">
+                            {
+                              event.description
+                            }
+                          </p>
+
+                        </div>
+
                       </div>
-
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">
-                          {formatText(
-                            event.event
-                          )}
-                        </p>
-
-                        <p className="mt-1 text-sm leading-6 text-slate-500">
-                          {event.description}
-                        </p>
-
-                        <p className="mt-2 text-xs text-slate-700">
-                          {new Date(
-                            event.timestamp
-                          ).toLocaleString()}
-                        </p>
-                      </div>
-
-                    </div>
-                  )
+                    );
+                  }
                 )}
 
               </div>
@@ -578,74 +1005,157 @@ const RecoveryCaseDetailPage =
 
           </div>
 
-          {/* Right */}
+          {/* RIGHT */}
           <div className="space-y-6">
+
+            {/* Recovery outcome */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+
+              <div className="flex items-center gap-3">
+
+                <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-400">
+                  <CircleDollarSign
+                    size={17}
+                  />
+                </div>
+
+                <div>
+
+                  <h2 className="font-semibold">
+                    Recovery Outcome
+                  </h2>
+
+                  <p className="text-xs text-slate-600">
+                    Verified financial result
+                  </p>
+
+                </div>
+
+              </div>
+
+              <div className="mt-6">
+
+                <p className="text-3xl font-semibold text-emerald-400">
+                  {formatINR(
+                    recoveryCase.amountRecovered
+                  )}
+                </p>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  recovered
+                </p>
+
+              </div>
+
+              <div className="mt-6 space-y-1">
+
+                <InfoRow
+                  label="Case status"
+                  value={
+                    formatText(
+                      recoveryCase.status
+                    )
+                  }
+                />
+
+                <InfoRow
+                  label="Attempts"
+                  value={
+                    recoveryCase.attempts
+                  }
+                />
+
+                <InfoRow
+                  label="Current action"
+                  value={
+                    recoveryCase.currentAction
+                      ? formatText(
+                          recoveryCase.currentAction
+                        )
+                      : "None"
+                  }
+                />
+
+                <InfoRow
+                  label="Stopped reason"
+                  value={
+                    recoveryCase.stoppedReason
+                  }
+                />
+
+              </div>
+
+            </div>
 
             {/* Payment */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
 
-              <h2 className="text-lg font-semibold">
-                Payment
-              </h2>
+              <div className="flex items-center gap-3">
 
-              <div className="mt-5 space-y-4 text-sm">
-
-                <div>
-                  <p className="text-slate-500">
-                    Amount
-                  </p>
-
-                  <p className="mt-1 font-medium">
-                    {formatINR(
-                      payment?.amount
-                    )}
-                  </p>
+                <div className="rounded-lg bg-slate-800 p-2 text-slate-400">
+                  <CreditCard
+                    size={17}
+                  />
                 </div>
 
                 <div>
-                  <p className="text-slate-500">
-                    Status
+
+                  <h2 className="font-semibold">
+                    Payment
+                  </h2>
+
+                  <p className="text-xs text-slate-600">
+                    Transaction details
                   </p>
 
-                  <p className="mt-1 font-medium">
-                    {formatText(
-                      payment?.status
-                    )}
-                  </p>
                 </div>
 
-                <div>
-                  <p className="text-slate-500">
-                    Method
-                  </p>
+              </div>
 
-                  <p className="mt-1 font-medium">
-                    {payment?.method ||
-                      "Unknown"}
-                  </p>
-                </div>
+              <div className="mt-5">
 
-                <div>
-                  <p className="text-slate-500">
-                    Failure Code
-                  </p>
+                <InfoRow
+                  label="Amount"
+                  value={formatINR(
+                    payment?.amount
+                  )}
+                />
 
-                  <p className="mt-1 font-medium">
-                    {payment?.failureCode ||
-                      "—"}
-                  </p>
-                </div>
+                <InfoRow
+                  label="Status"
+                  value={formatText(
+                    payment?.status
+                  )}
+                />
 
-                <div>
-                  <p className="text-slate-500">
-                    Failure Reason
-                  </p>
+                <InfoRow
+                  label="Method"
+                  value={
+                    payment?.method
+                  }
+                />
 
-                  <p className="mt-1 leading-5">
-                    {payment?.failureReason ||
-                      "—"}
-                  </p>
-                </div>
+                <InfoRow
+                  label="Failure code"
+                  value={
+                    payment?.failureCode
+                  }
+                />
+
+                <InfoRow
+                  label="Failure reason"
+                  value={
+                    payment?.failureReason
+                  }
+                />
+
+                <InfoRow
+                  label="Payment ID"
+                  value={
+                    payment?.razorpayPaymentId
+                  }
+                  mono
+                />
 
               </div>
 
@@ -654,57 +1164,64 @@ const RecoveryCaseDetailPage =
             {/* Customer */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
 
-              <h2 className="text-lg font-semibold">
-                Customer
-              </h2>
+              <div className="flex items-center gap-3">
 
-              <div className="mt-5 space-y-4 text-sm">
-
-                <div>
-                  <p className="text-slate-500">
-                    Name
-                  </p>
-
-                  <p className="mt-1 font-medium">
-                    {customer?.name}
-                  </p>
+                <div className="rounded-lg bg-slate-800 p-2 text-slate-400">
+                  <User
+                    size={17}
+                  />
                 </div>
 
                 <div>
-                  <p className="text-slate-500">
-                    Lifetime Value
+
+                  <h2 className="font-semibold">
+                    Customer
+                  </h2>
+
+                  <p className="text-xs text-slate-600">
+                    Recovery context
                   </p>
 
-                  <p className="mt-1 font-medium">
-                    {formatINR(
-                      customer?.lifetimeValue
-                    )}
-                  </p>
                 </div>
 
-                <div>
-                  <p className="text-slate-500">
-                    Segment
-                  </p>
+              </div>
 
-                  <p className="mt-1">
-                    {formatText(
-                      customer?.segment
-                    )}
-                  </p>
-                </div>
+              <div className="mt-5">
 
-                <div>
-                  <p className="text-slate-500">
-                    Preferred Channel
-                  </p>
+                <InfoRow
+                  label="Name"
+                  value={
+                    customer?.name
+                  }
+                />
 
-                  <p className="mt-1">
-                    {formatText(
-                      customer?.preferredChannel
-                    )}
-                  </p>
-                </div>
+                <InfoRow
+                  label="Lifetime value"
+                  value={formatINR(
+                    customer?.lifetimeValue
+                  )}
+                />
+
+                <InfoRow
+                  label="Segment"
+                  value={formatText(
+                    customer?.segment
+                  )}
+                />
+
+                <InfoRow
+                  label="Preferred channel"
+                  value={formatText(
+                    customer?.preferredChannel
+                  )}
+                />
+
+                <InfoRow
+                  label="Successful payments"
+                  value={
+                    customer?.successfulPayments
+                  }
+                />
 
               </div>
 
@@ -717,9 +1234,10 @@ const RecoveryCaseDetailPage =
         {/* Audit */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
             <div>
+
               <h2 className="text-lg font-semibold">
                 Audit Trail
               </h2>
@@ -727,11 +1245,12 @@ const RecoveryCaseDetailPage =
               <p className="mt-1 text-sm text-slate-500">
                 Every important decision and action recorded by RecoverAI.
               </p>
+
             </div>
 
-            <p className="text-xs text-slate-600">
+            <div className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-600">
               {auditLogs.length} events
-            </p>
+            </div>
 
           </div>
 
@@ -740,7 +1259,8 @@ const RecoveryCaseDetailPage =
             <table className="w-full min-w-212.5 text-left text-sm">
 
               <thead>
-                <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
+
+                <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-600">
 
                   <th className="pb-3 font-medium">
                     Event
@@ -759,6 +1279,7 @@ const RecoveryCaseDetailPage =
                   </th>
 
                 </tr>
+
               </thead>
 
               <tbody>
@@ -767,10 +1288,10 @@ const RecoveryCaseDetailPage =
                   (log) => (
                     <tr
                       key={log._id}
-                      className="border-b border-slate-800/70"
+                      className="border-b border-slate-800/70 last:border-0"
                     >
 
-                      <td className="py-4 font-medium">
+                      <td className="py-4 font-medium text-slate-300">
                         {formatText(
                           log.eventType
                         )}

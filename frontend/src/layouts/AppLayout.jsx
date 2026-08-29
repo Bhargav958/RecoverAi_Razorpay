@@ -162,8 +162,12 @@ const AppLayout = () => {
 
             <div className="flex items-center gap-4">
 
-              <div className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
-                SIMULATION
+              <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-400">
+
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+
+                Simulation Mode
+
               </div>
 
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-sm">

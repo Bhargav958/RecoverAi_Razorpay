@@ -96,19 +96,19 @@ const processRecoveryCase = async (
     });
   };
 
-const runRecoveryWorker = async ({ ignoreSchedule = false, mode = "SIMULATION", limit = 20 } = {}) => {
-    return request(
-      "/recovery/worker/run",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          ignoreSchedule,
-          mode,
-          limit
-        })
-      }
-    );
-  };
+// const runRecoveryWorker = async ({ ignoreSchedule = false, mode = "SIMULATION", limit = 20 } = {}) => {
+//     return request(
+//       "/recovery/worker/run",
+//       {
+//         method: "POST",
+//         body: JSON.stringify({
+//           ignoreSchedule,
+//           mode,
+//           limit
+//         })
+//       }
+//     );
+//   };
 
   const getRecoveryCaseAudit =
   async (id) => {
@@ -165,6 +165,46 @@ const rejectEscalatedCase = async (id) => {
     );
   };
 
+const simulatePaymentFailure = async ({
+    email = "amit.singh@example.demo",
+    amount = 4999,
+    method = "card",
+    failureCode = "BANK_TEMPORARY_FAILURE",
+    failureReason = "Temporary bank-side payment failure"
+  } = {}) => {
+    return request(
+      "/demo/payment-failure",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          email,
+          amount,
+          method,
+          failureCode,
+          failureReason
+        })
+      }
+    );
+  };
+
+const runRecoveryWorker = async ({
+    limit = 10,
+    mode = "SIMULATION",
+    ignoreSchedule = true
+  } = {}) => {
+    return request(
+      "/recovery/worker/run",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          limit,
+          mode,
+          ignoreSchedule
+        })
+      }
+    );
+  };
+
 export {
   getDashboardSummary,
   getRecoveryCases,
@@ -177,5 +217,6 @@ export {
   getMerchantPolicy,
   getWebhookStatus,
   approveEscalatedCase,
-  rejectEscalatedCase
+  rejectEscalatedCase,
+  simulatePaymentFailure
 };
