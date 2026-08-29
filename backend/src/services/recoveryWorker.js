@@ -13,17 +13,16 @@ import {
 | Recovery Worker
 |--------------------------------------------------------------------------
 |
-| Finds scheduled recovery actions whose execution time has arrived.
+| Finds scheduled recovery actions and processes them.
 |
-| Flow:
+| Normal mode:
+|   - Processes scheduled actions that are due.
 |
-| SCHEDULED
-|    ↓
-| EXECUTE
-|    ↓
-| VERIFY
-|    ↓
-| RECOVERED / FAILED
+| Demo mode:
+|   - ignoreSchedule=true allows scheduled actions to execute immediately.
+|
+| Targeted mode:
+|   - recoveryCaseId allows the demo/UI to execute ONE specific case.
 |
 |--------------------------------------------------------------------------
 */
@@ -36,18 +35,46 @@ import {
 
 const getDueActions = async ({
   merchantId = null,
+  recoveryCaseId = null,
   ignoreSchedule = false,
   limit = 20
 } = {}) => {
+
+  /*
+  |--------------------------------------------------------------------------
+  | Base query
+  |--------------------------------------------------------------------------
+  */
+
   const query = {
     status: "SCHEDULED"
   };
 
   /*
-   * Optional merchant filtering.
-   */
+  |--------------------------------------------------------------------------
+  | Specific recovery case
+  |--------------------------------------------------------------------------
+  |
+  | This takes priority over broad merchant filtering.
+  |
+  |--------------------------------------------------------------------------
+  */
 
-  if (merchantId) {
+  if (recoveryCaseId) {
+    query.recoveryCaseId =
+      recoveryCaseId;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Merchant filtering
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    merchantId &&
+    !recoveryCaseId
+  ) {
     const cases =
       await RecoveryCase.find({
         merchantId
@@ -64,13 +91,10 @@ const getDueActions = async ({
   }
 
   /*
-   * In normal/production-like mode, only actions whose
-   * scheduledAt has arrived are due.
-   *
-   * In demo mode, ignoreSchedule=true allows us to execute
-   * a scheduled action immediately without changing its
-   * original schedule.
-   */
+  |--------------------------------------------------------------------------
+  | Schedule filtering
+  |--------------------------------------------------------------------------
+  */
 
   if (!ignoreSchedule) {
     query.scheduledAt = {
@@ -78,7 +102,9 @@ const getDueActions = async ({
     };
   }
 
-  return RecoveryAction.find(query)
+  return RecoveryAction.find(
+    query
+  )
     .sort({
       scheduledAt: 1
     })
@@ -95,6 +121,7 @@ const processScheduledAction = async ({
   action,
   mode = "SIMULATION"
 }) => {
+
   /*
   |--------------------------------------------------------------------------
   | Execute
@@ -154,10 +181,6 @@ const processScheduledAction = async ({
   |--------------------------------------------------------------------------
   | Verify
   |--------------------------------------------------------------------------
-  |
-  | In simulation mode we deliberately simulate a successful
-  | payment so that we can demonstrate the full workflow.
-  |
   */
 
   const verification =
@@ -177,27 +200,36 @@ const processScheduledAction = async ({
 
 /*
 |--------------------------------------------------------------------------
-| Process all due actions
+| Process actions
 |--------------------------------------------------------------------------
 */
 
 const processDueActions = async ({
   merchantId = null,
+  recoveryCaseId = null,
   ignoreSchedule = false,
   mode = "SIMULATION",
   limit = 20
 } = {}) => {
+
   const actions =
     await getDueActions({
       merchantId,
+
+      recoveryCaseId,
+
       ignoreSchedule,
+
       limit
     });
 
   const results = [];
 
-  for (const action of actions) {
+  for (
+    const action of actions
+  ) {
     try {
+
       const result =
         await processScheduledAction({
           action,
@@ -208,11 +240,16 @@ const processDueActions = async ({
         actionId:
           action._id,
 
+        recoveryCaseId:
+          action.recoveryCaseId,
+
         success: true,
 
         result
       });
+
     } catch (error) {
+
       console.error(
         `Worker failed for action ${action._id}:`,
         error.message
@@ -222,6 +259,9 @@ const processDueActions = async ({
         actionId:
           action._id,
 
+        recoveryCaseId:
+          action.recoveryCaseId,
+
         success: false,
 
         error:
@@ -230,9 +270,56 @@ const processDueActions = async ({
     }
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Summary
+  |--------------------------------------------------------------------------
+  */
+
+  const recovered =
+    results.filter(
+      (item) =>
+        item.success &&
+        item.result?.verification
+          ?.recovered
+    );
+
+  const failed =
+    results.filter(
+      (item) =>
+        !item.success
+    );
+
+  const recoveredAmount =
+    recovered.reduce(
+      (total, item) =>
+        total +
+        Number(
+          item.result?.verification
+            ?.amountRecovered || 0
+        ),
+      0
+    );
+
   return {
     processed:
       results.length,
+
+    executed:
+      results.filter(
+        (item) =>
+          item.success &&
+          item.result?.execution
+            ?.executed
+      ).length,
+
+    recovered:
+      recovered.length,
+
+    recoveredAmount,
+
+    failed:
+      failed.length,
 
     results
   };

@@ -21,6 +21,14 @@ import escalationRoutes from "./routes/escalationRoutes.js";
 
 import demoRoutes from "./routes/demoRoutes.js"
 
+import customerRoutes from "./routes/customerRoutes.js";
+
+import paymentRoutes from "./routes/paymentRoutes.js";
+
+import auditRoutes from "./routes/auditRoutes.js";
+
+import analyticsRoutes from "./routes/analyticsRoutes.js";
+
 const app =
   express();
 
@@ -113,6 +121,26 @@ app.use(
 app.use(
   "/api/demo",
   demoRoutes
+);
+
+app.use(
+  "/api/customers",
+  customerRoutes
+);
+
+app.use(
+  "/api/payments",
+  paymentRoutes
+);
+
+app.use(
+  "/api/audit",
+  auditRoutes
+);
+
+app.use(
+  "/api/analytics",
+  analyticsRoutes
 );
 
 export default app;

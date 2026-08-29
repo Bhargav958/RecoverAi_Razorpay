@@ -1,7 +1,8 @@
 import express from "express";
 
 import {
-  runBatchSimulation
+  runBatchSimulation,
+  runScenarioSimulation
 } from "../controllers/simulationController.js";
 
 const router =
@@ -10,6 +11,11 @@ const router =
 router.post(
   "/run",
   runBatchSimulation
+);
+
+router.post(
+  "/scenario",
+  runScenarioSimulation
 );
 
 export default router;

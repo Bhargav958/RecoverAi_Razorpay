@@ -1,7 +1,8 @@
 import express from "express";
 
 import {
-  getMerchantPolicy
+  getMerchantPolicy,
+  updateMerchantPolicy
 } from "../controllers/policyController.js";
 
 const router =
@@ -10,6 +11,11 @@ const router =
 router.get(
   "/",
   getMerchantPolicy
+);
+
+router.put(
+  "/",
+  updateMerchantPolicy
 );
 
 export default router;

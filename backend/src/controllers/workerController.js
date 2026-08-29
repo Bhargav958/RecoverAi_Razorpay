@@ -1,6 +1,5 @@
-import {
-  processDueActions
-} from "../services/recoveryWorker.js";
+import processDueActions
+  from "../services/recoveryWorker.js";
 
 const runRecoveryWorker = async (
   req,
@@ -9,6 +8,7 @@ const runRecoveryWorker = async (
   try {
     const {
       merchantId = null,
+      recoveryCaseId = null,
       ignoreSchedule = false,
       mode = "SIMULATION",
       limit = 20
@@ -16,16 +16,26 @@ const runRecoveryWorker = async (
 
     const result =
       await processDueActions({
+
         merchantId,
+
+        recoveryCaseId,
+
         ignoreSchedule,
+
         mode,
+
         limit
       });
 
     res.status(200).json({
+
       success: true,
+
       data: result
+
     });
+
   } catch (error) {
     console.error(
       "Recovery worker error:",
@@ -33,8 +43,11 @@ const runRecoveryWorker = async (
     );
 
     res.status(500).json({
+
       success: false,
-      message: error.message
+
+      message:
+        error.message
     });
   }
 };

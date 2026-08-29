@@ -276,6 +276,22 @@ const getRecoveryRate = (
   );
 };
 
+const getCaseRecoveryRate = (
+  recoveredCaseCount,
+  caseCount
+) => {
+  if (!caseCount || caseCount <= 0) {
+    return 0;
+  }
+
+  return Number(
+    (
+      (recoveredCaseCount / caseCount) *
+      100
+    ).toFixed(2)
+  );
+};
+
 /*
 |--------------------------------------------------------------------------
 | Root Cause Distribution
@@ -373,13 +389,22 @@ const getRecoveryMetrics =
         targetedRevenue
       );
 
+    const caseRecoveryRate =
+      getCaseRecoveryRate(
+        recoveredCaseCount,
+        caseCount
+      );
+
     return {
       revenueAtRisk,
       recoverableRevenue,
       targetedRevenue,
       attemptedRevenue,
       recoveredRevenue,
+      revenueRecoveryRate:
+        recoveryRate,
       recoveryRate,
+      caseRecoveryRate,
       activeCases,
       caseCount,
       recoveredCaseCount,
@@ -395,5 +420,6 @@ export {
   getRecoveredRevenue,
   getActiveCases,
   getRecoveryRate,
+  getCaseRecoveryRate,
   getRecoveryMetrics
 };

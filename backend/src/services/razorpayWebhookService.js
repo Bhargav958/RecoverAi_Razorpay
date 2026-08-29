@@ -473,11 +473,10 @@ const processRazorpayWebhook =
        */
 
       if (
-        existing.status !==
-        "DUPLICATE"
+        !existing.processed
       ) {
-        existing.status =
-          "DUPLICATE";
+        existing.processed =
+          true;
 
         await existing.save();
       }
@@ -506,9 +505,6 @@ const processRazorpayWebhook =
 
         merchantId:
           merchant._id,
-
-        status:
-          "RECEIVED",
 
         payload,
 
@@ -586,8 +582,11 @@ const processRazorpayWebhook =
           };
       }
 
-      webhookEvent.status =
-        "PROCESSED";
+      webhookEvent.processed =
+        true;
+
+      webhookEvent.error =
+        null;
 
       webhookEvent.processedAt =
         new Date();
@@ -605,10 +604,10 @@ const processRazorpayWebhook =
         result
       };
     } catch (error) {
-      webhookEvent.status =
-        "FAILED";
+      webhookEvent.processed =
+        false;
 
-      webhookEvent.errorMessage =
+      webhookEvent.error =
         error.message;
 
       webhookEvent.processedAt =

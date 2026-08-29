@@ -1,4 +1,5 @@
 import RecoveryCase from "../models/RecoveryCase.js";
+import RecoveryAction from "../models/RecoveryAction.js";
 
 import {
   createAuditLog
@@ -39,14 +40,71 @@ const approveEscalatedCase = async (
       });
     }
 
+    const existingAction =
+      await RecoveryAction.findOne({
+        recoveryCaseId:
+          recoveryCase._id,
+
+        status: {
+          $in: [
+            "SCHEDULED",
+            "PENDING",
+            "EXECUTED",
+            "SUCCEEDED"
+          ]
+        }
+      });
+
+    if (existingAction) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "This case already has an active recovery action."
+      });
+    }
+
+    const approvedAction =
+      await RecoveryAction.create({
+        recoveryCaseId:
+          recoveryCase._id,
+
+        actionType:
+          recoveryCase.recommendedAction ||
+          "RETRY_PAYMENT",
+
+        targetChannel:
+          recoveryCase.recommendedAction ===
+          "SEND_EMAIL"
+            ? "EMAIL"
+            : recoveryCase.recommendedAction ===
+                "SEND_SMS_OR_WHATSAPP"
+              ? "SMS"
+              : "RAZORPAY",
+
+        reason:
+          "Merchant approved this recovery action after human review.",
+
+        status:
+          "SCHEDULED",
+
+        costTier:
+          "LOW",
+
+        scheduledAt:
+          new Date()
+      });
+
     recoveryCase.status =
-      "ACTION_SELECTED";
+      "PENDING_ACTION";
 
     recoveryCase.currentAction =
       recoveryCase.recommendedAction;
 
     recoveryCase.stoppedReason =
       null;
+
+    recoveryCase.nextActionAt =
+      approvedAction.scheduledAt;
 
     recoveryCase.timeline.push({
       event:
@@ -56,6 +114,17 @@ const approveEscalatedCase = async (
         "Merchant approved the AI-recommended recovery action.",
 
       timestamp: new Date()
+    });
+
+    recoveryCase.timeline.push({
+      event:
+        "ACTION_SCHEDULED",
+
+      description:
+        "Merchant-approved recovery action scheduled for worker execution.",
+
+      timestamp:
+        new Date()
     });
 
     await recoveryCase.save();
@@ -78,7 +147,35 @@ const approveEscalatedCase = async (
 
       metadata: {
         action:
-          recoveryCase.recommendedAction
+          recoveryCase.recommendedAction,
+
+        actionId:
+          approvedAction._id
+      }
+    });
+
+    await createAuditLog({
+      merchantId:
+        recoveryCase.merchantId,
+
+      recoveryCaseId:
+        recoveryCase._id,
+
+      actor:
+        "MERCHANT",
+
+      eventType:
+        "ACTION_SCHEDULED",
+
+      description:
+        "Merchant-approved recovery action scheduled for worker execution.",
+
+      metadata: {
+        actionId:
+          approvedAction._id,
+
+        action:
+          approvedAction.actionType
       }
     });
 
@@ -86,7 +183,9 @@ const approveEscalatedCase = async (
       success: true,
 
       data: {
-        recoveryCase
+        recoveryCase,
+        action:
+          approvedAction
       }
     });
   } catch (error) {
