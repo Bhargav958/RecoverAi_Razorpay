@@ -82,64 +82,68 @@ const AppLayout = () => {
       <div className="flex min-h-screen">
 
         {/* Sidebar */}
-        <aside className="w-64 border-r border-slate-800 bg-slate-950">
+        <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col justify-between border-r border-slate-800 bg-slate-950 overflow-y-auto">
 
-          {/* Logo */}
-          <div className="flex h-20 items-center gap-3 border-b border-slate-800 px-6">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-950">
-              <Zap size={18} />
+          <div>
+            {/* Logo */}
+            <div className="flex h-20 items-center gap-3 border-b border-slate-800 px-6">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-950">
+                <Zap size={18} />
+              </div>
+
+              <div>
+                <h1 className="text-lg font-semibold">
+                  RecoverAI
+                </h1>
+
+                <p className="text-xs text-slate-500">
+                  Revenue Recovery
+                </p>
+              </div>
             </div>
 
-            <div>
-              <h1 className="text-lg font-semibold">
-                RecoverAI
-              </h1>
-
-              <p className="text-xs text-slate-500">
-                Revenue Recovery
-              </p>
-            </div>
+            {/* Navigation */}
+            <nav className="space-y-1 p-4">
+              {navigation.map(
+                ({
+                  label,
+                  path,
+                  icon: Icon
+                }) => (
+                  <NavLink
+                    key={path}
+                    to={path}
+                    end={path === "/"}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
+                        isActive
+                          ? "bg-slate-800 text-white"
+                          : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                      }`
+                    }
+                  >
+                    <Icon size={17} />
+                    {label}
+                  </NavLink>
+                )
+              )}
+            </nav>
           </div>
 
-          {/* Navigation */}
-          <nav className="space-y-1 p-4">
-            {navigation.map(
-              ({
-                label,
-                path,
-                icon: Icon
-              }) => (
-                <NavLink
-                  key={path}
-                  to={path}
-                  end={path === "/"}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
-                      isActive
-                        ? "bg-slate-800 text-white"
-                        : "text-slate-400 hover:bg-slate-900 hover:text-white"
-                    }`
-                  }
-                >
-                  <Icon size={17} />
-                  {label}
-                </NavLink>
-              )
-            )}
-          </nav>
-
           {/* Mode */}
-          <div className="mx-4 mt-auto rounded-xl border border-slate-800 bg-slate-900 p-4">
-            <p className="text-xs text-slate-500">
-              Environment
-            </p>
+          <div className="p-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+              <p className="text-xs text-slate-500">
+                Environment
+              </p>
 
-            <div className="mt-2 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <div className="mt-2 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-400" />
 
-              <span className="text-sm">
-                Razorpay Test + Simulation
-              </span>
+                <span className="text-sm">
+                  Razorpay Test + Simulation
+                </span>
+              </div>
             </div>
           </div>
         </aside>
@@ -148,7 +152,7 @@ const AppLayout = () => {
         <main className="flex-1 overflow-x-hidden">
 
           {/* Header */}
-          <header className="flex h-20 items-center justify-between border-b border-slate-800 px-8">
+          <header className="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-slate-800 bg-slate-950/90 px-8 backdrop-blur">
 
             <div>
               <p className="text-sm text-slate-500">
