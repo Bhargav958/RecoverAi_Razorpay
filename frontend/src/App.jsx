@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import AppLayout from "./layouts/AppLayout.jsx";
 
@@ -61,7 +61,7 @@ const App = () => {
           <Route
             path="/revenue-risk"
             element={
-              <AnalyticsPage />
+              <Navigate to="/analytics" replace />
             }
           />
 

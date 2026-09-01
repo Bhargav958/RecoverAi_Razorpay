@@ -25,11 +25,6 @@ const navigation = [
     icon: LayoutDashboard
   },
   {
-    label: "Revenue Risk",
-    path: "/revenue-risk",
-    icon: ShieldAlert
-  },
-  {
     label: "Command Center",
     path: "/command-center",
     icon: ListChecks
