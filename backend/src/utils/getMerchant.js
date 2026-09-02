@@ -28,9 +28,13 @@ const getMerchant = async (merchantId = null) => {
       );
   } else {
     merchant =
-      await Merchant.findOne({
+      (await Merchant.findOne({
+        businessName: "IIITT SaaS"
+      })) ||
+      (await Merchant.findOne({
         businessName: "Acme SaaS"
-      });
+      })) ||
+      (await Merchant.findOne());
   }
 
   if (!merchant) {

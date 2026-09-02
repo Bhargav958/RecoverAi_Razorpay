@@ -155,7 +155,7 @@ const AppLayout = () => {
               </p>
 
               <p className="font-medium">
-                Acme SaaS
+                IIITT SaaS
               </p>
             </div>
 

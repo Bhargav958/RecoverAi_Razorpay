@@ -252,12 +252,15 @@ const seedDatabase = async () => {
     */
 
     const existingMerchant =
-      await Merchant.findOne({
+      (await Merchant.findOne({
+        businessName: "IIITT SaaS"
+      })) ||
+      (await Merchant.findOne({
         businessName: "Acme SaaS"
-      });
+      }));
 
     if (existingMerchant) {
-      console.log( "🧹 Removing previous Acme SaaS demo data..." );
+      console.log( `🧹 Removing previous ${existingMerchant.businessName} demo data...` );
 
       /*
        * Delete audit logs first.
@@ -323,15 +326,15 @@ const seedDatabase = async () => {
     |--------------------------------------------------------------------------
     */
 
-    console.log( "🏢 Creating Acme SaaS merchant..." );
+    console.log( "🏢 Creating IIITT SaaS merchant..." );
 
     const merchant =
       await Merchant.create({
-        name: "RecoverAI Demo Merchant",
+        name: "IIITT SaaS Merchant",
 
-        businessName: "Acme SaaS",
+        businessName: "IIITT SaaS",
 
-        email: "admin@acmesaas.demo",
+        email: "admin@iiittsaas.demo",
 
         currency: "INR",
 

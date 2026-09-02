@@ -199,6 +199,8 @@ const PoliciesPage = () => {
     );
   }
 
+
+
   if (error) {
     return (
       <div className="space-y-4">
@@ -289,16 +291,14 @@ const PoliciesPage = () => {
       <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 px-6 py-5">
 
         <div>
-
           <p className="text-xs uppercase tracking-wider text-slate-600">
             Active merchant policy
           </p>
 
           <p className="mt-1 font-medium">
             {merchant?.businessName ||
-              "Acme SaaS"}
+              "IIITT SaaS"}
           </p>
-
         </div>
 
         <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-400">

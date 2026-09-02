@@ -71,7 +71,7 @@ The primary RecoverAI user is the business collecting payments through Razorpay.
 
 Example demo merchant:
 
-- **Business:** Acme SaaS
+- **Business:** IIITT SaaS
 - **Currency:** INR
 - **Razorpay mode:** Test
 
@@ -325,7 +325,7 @@ The Golden Case is intentionally kept as a clean, explainable demonstration of t
 
 The seed dataset currently creates:
 
-- **Merchant:** Acme SaaS
+- **Merchant:** IIITT SaaS
 - **Customers:** 12,482
 - **Failed payment events:** 250
 - **Recovery cases:** 250
@@ -714,7 +714,7 @@ cd backend
 npm run seed
 ```
 
-The seed command creates the clean Acme SaaS demo state.
+The seed command creates the clean IIITT SaaS demo state.
 
 ### Run frontend
 

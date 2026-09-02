@@ -98,13 +98,17 @@ const verifyWebhookSignature = ({
 const getWebhookMerchant =
   async () => {
     const merchant =
-      await Merchant.findOne({
+      (await Merchant.findOne({
+        businessName: "IIITT SaaS"
+      })) ||
+      (await Merchant.findOne({
         businessName: "Acme SaaS"
-      });
+      })) ||
+      (await Merchant.findOne());
 
     if (!merchant) {
       throw new Error(
-        "Acme SaaS merchant not found"
+        "Demo merchant not found"
       );
     }
 

@@ -362,6 +362,7 @@ const DashboardPage = () => {
     );
   }
 
+
   const metrics =
     data.metrics;
 
@@ -390,30 +391,25 @@ const DashboardPage = () => {
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
 
         <div>
-
           <p className="text-sm text-slate-500">
             Revenue Recovery Command Center
           </p>
 
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">
             {data.merchant?.businessName ||
-              "Acme SaaS"}
+              "IIITT SaaS"}
           </h1>
 
           <p className="mt-2 text-slate-400">
             Recover revenue before it slips away.
           </p>
-
         </div>
 
         <div className="flex items-center gap-3">
 
           <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400">
-
             <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-
             Agent Active
-
           </div>
 
           <div className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-500">
