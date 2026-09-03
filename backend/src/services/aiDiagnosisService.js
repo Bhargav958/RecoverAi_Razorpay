@@ -366,20 +366,31 @@ Analyze this case and return the structured diagnosis.
 `;
 
   try {
-    const response =
-      await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+    const generatePromise = ai.models.generateContent({
+      model: "gemini-3.6-flash",
 
-        contents: prompt,
+      contents: prompt,
 
-        config: {
-          responseMimeType:
-            "application/json",
+      config: {
+        responseMimeType:
+          "application/json",
 
-          responseSchema:
-            diagnosisSchema
-        }
-      });
+        responseSchema:
+          diagnosisSchema
+      }
+    });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Gemini diagnosis timed out (4s limit)")),
+        4000
+      )
+    );
+
+    const response = await Promise.race([
+      generatePromise,
+      timeoutPromise
+    ]);
 
     const diagnosis =
       JSON.parse(response.text);

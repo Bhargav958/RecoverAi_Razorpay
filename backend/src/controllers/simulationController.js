@@ -2,6 +2,7 @@ import getMerchant from "../utils/getMerchant.js";
 
 import runSimulation from "../services/simulationService.js";
 import Customer from "../models/Customer.js";
+import RecoveryCase from "../models/RecoveryCase.js";
 import processRazorpayWebhook from "../services/razorpayWebhookService.js";
 import crypto from "crypto";
 
@@ -222,6 +223,30 @@ const runScenarioSimulation = async (
         secret
       });
 
+    const caseId =
+      result.result?.recoveryCase?._id;
+
+    let latestCase = null;
+
+    if (caseId) {
+      // Poll briefly (up to 3s) for the orchestrator to finish AI diagnosis & policy evaluation
+      for (let i = 0; i < 15; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        latestCase = await RecoveryCase.findById(caseId);
+        if (
+          latestCase &&
+          !["DETECTED", "ANALYZING"].includes(latestCase.status)
+        ) {
+          break;
+        }
+      }
+    }
+
+    const currentStatus =
+      latestCase?.status ||
+      result.result?.recoveryCase?.status ||
+      "DETECTED";
+
     res.status(200).json({
       success: true,
       data: {
@@ -241,11 +266,17 @@ const runScenarioSimulation = async (
         amount:
           scenario.amount,
         recoveryCaseId:
-          result.result?.recoveryCase?._id ||
-          null,
+          caseId || null,
         status:
-          result.result?.recoveryCase?.status ||
-          null
+          currentStatus,
+        requiresHumanReview:
+          currentStatus === "ESCALATED",
+        policyReason:
+          latestCase?.timeline?.find(
+            (t) =>
+              t.event === "HUMAN_ESCALATION" ||
+              t.event === "POLICY_REJECTED"
+          )?.description || null
       }
     });
   } catch (error) {

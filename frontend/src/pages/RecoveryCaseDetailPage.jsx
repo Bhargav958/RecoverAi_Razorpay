@@ -16,14 +16,16 @@ import {
   CalendarClock,
   Zap,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Play
 } from "lucide-react";
 
 import {
   getRecoveryCase,
   getRecoveryCaseAudit,
   approveEscalatedCase,
-  rejectEscalatedCase
+  rejectEscalatedCase,
+  runRecoveryWorker
 } from "../services/api.js";
 
 import {
@@ -361,6 +363,30 @@ const RecoveryCaseDetailPage =
           id
         );
 
+        // Automatically run recovery worker in simulation mode to settle approved case
+        await runRecoveryWorker({
+          mode: "SIMULATION"
+        });
+
+        await loadCase(true);
+      } catch (err) {
+        setError(
+          err.message
+        );
+      } finally {
+        setReviewLoading(false);
+      }
+    };
+
+    const handleExecuteWorker = async () => {
+      try {
+        setReviewLoading(true);
+        setError("");
+
+        await runRecoveryWorker({
+          mode: "SIMULATION"
+        });
+
         await loadCase(true);
       } catch (err) {
         setError(
@@ -688,6 +714,46 @@ const RecoveryCaseDetailPage =
 
             </div>
 
+          </div>
+        )}
+
+        {/* Pending Action Execution Banner */}
+        {recoveryCase.status === "PENDING_ACTION" && (
+          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-400">
+                  <Play size={18} />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-blue-300">
+                    Recovery Action Scheduled & Ready
+                  </h2>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
+                    Action:{" "}
+                    <span className="font-medium text-white">
+                      {formatText(
+                        recoveryCase.recommendedAction || "RETRY_PAYMENT"
+                      )}
+                    </span>
+                    . You can execute and settle this recovery immediately with
+                    the worker.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleExecuteWorker}
+                disabled={reviewLoading}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-emerald-300 disabled:opacity-50"
+              >
+                <Zap size={16} />
+                {reviewLoading
+                  ? "Executing Worker..."
+                  : "Execute Recovery Worker Now"}
+              </button>
+            </div>
           </div>
         )}
 

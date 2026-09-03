@@ -538,19 +538,61 @@ const SimulationPage = () => {
 
           </div>
 
-          {simulation.recoveryCaseId && (
-            <button
-              type="button"
-              onClick={() =>
-                (window.location.href =
-                  `/recovery-cases/${simulation.recoveryCaseId}`)
-              }
-              className="mt-5 inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-slate-300 hover:border-slate-500 hover:text-white"
-            >
-              Open resulting recovery case
-              <Play size={13} />
-            </button>
-          )}
+          {/* High-Value Escalation Callout */}
+          {simulation.recoveryCaseId &&
+            (simulation.status === "ESCALATED" ||
+              simulation.requiresHumanReview ||
+              simulation.scenario === "HIGH_VALUE_ESCALATION") && (
+              <div className="mt-5 flex flex-col gap-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-amber-500/20 p-2 text-amber-400">
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-amber-300">
+                        Status: ESCALATED
+                      </span>
+                      <span className="rounded-full border border-amber-500/30 bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+                        Human Review Required
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-slate-300">
+                      {simulation.policyReason ||
+                        `This ₹${(simulation.amount || 50000).toLocaleString(
+                          "en-IN"
+                        )} payment exceeds the merchant autonomous limit (₹25,000). Policy Engine paused automatic recovery until a human approves.`}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    (window.location.href = `/recovery-cases/${simulation.recoveryCaseId}`)
+                  }
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-400 px-4 py-2.5 text-xs font-semibold text-slate-950 shadow-sm transition hover:bg-amber-300"
+                >
+                  Review & Approve Case →
+                </button>
+              </div>
+            )}
+
+          {/* Standard Scenario Case Link */}
+          {simulation.recoveryCaseId &&
+            simulation.status !== "ESCALATED" &&
+            simulation.scenario !== "HIGH_VALUE_ESCALATION" && (
+              <button
+                type="button"
+                onClick={() =>
+                  (window.location.href = `/recovery-cases/${simulation.recoveryCaseId}`)
+                }
+                className="mt-5 inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-slate-300 hover:border-slate-500 hover:text-white"
+              >
+                Open resulting recovery case
+                <Play size={13} />
+              </button>
+            )}
 
           {/* Secondary */}
           <div className="mt-4 grid gap-4 md:grid-cols-4">
