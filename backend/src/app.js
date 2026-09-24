@@ -35,7 +35,11 @@ const app =
 app.use(
   cors({
     origin:
-      process.env.CLIENT_URL ? [process.env.CLIENT_URL, "http://localhost:5173", "http://localhost:3000"] : true,
+      (() => {
+        if (!process.env.CLIENT_URL) return true;
+        const cleanClientUrl = process.env.CLIENT_URL.replace(/\/$/, "");
+        return [cleanClientUrl, `${cleanClientUrl}/`, "http://localhost:5173", "http://localhost:3000"];
+      })(),
 
     credentials: true
   })
